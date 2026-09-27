@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UIKit
 import UserNotifications
 
 /// Owns the lifecycle of everything that touches an iOS notification budget.
@@ -33,6 +34,15 @@ final class NudgeCoordinator {
     /// notification response. Cheap enough to run eagerly; the alternative is
     /// a stale 64-slot budget, which loses reminders silently.
     func resync(context: ModelContext, now: Date = .now) async {
+        // Rescheduling touches dozens of system calls and takes seconds. Lock
+        // the phone in the middle of one and iOS suspends the app, leaving the
+        // work half done. The assertion buys enough time to finish.
+        let assertion = UIApplication.shared.beginBackgroundTask(withName: "psst.resync")
+        defer {
+            if assertion != .invalid { UIApplication.shared.endBackgroundTask(assertion) }
+        }
+        psstLog.notice("resync started")
+
         let habits = (try? context.fetch(FetchDescriptor<Habit>())) ?? []
         let byID = Dictionary(uniqueKeysWithValues: habits.map { ($0.id, $0) })
 

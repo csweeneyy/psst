@@ -217,6 +217,16 @@ weekly review, and apply in one tap.
   `UNMutableNotificationContent`, not in `UNNotificationSound`, not in AlarmKit
   or ActivityKit, and CoreHaptics cannot run suspended. Varying the words is
   the available lever; varying the sound file is the other one.
+- **Never clear-then-rebuild the notification schedule.** `sync` diffs, and
+  adds before it removes. The old version left a window with nothing
+  scheduled, and an app suspended inside it never fired anything.
+- Anything that schedules must survive a lock. `resync` holds a background
+  task assertion, and hand-moving a nudge schedules its alert immediately
+  rather than waiting for the resync.
+- A recurring AlarmKit alarm carries one baked-in intent for every future
+  firing, so the occurrence id inside it matches nothing. `OccurrenceMatcher`
+  falls back to the habit's nearest pending nudge. Without that, the whole
+  alarm tier silently recorded no completions.
 - `resync` must purge as well as add. `SchedulingService.stale` decides what
   the new plan orphaned; skipping it leaves the old schedule's rows on Home and
   makes every habit edit look like a no-op. Regression: `ReconciliationTests`.

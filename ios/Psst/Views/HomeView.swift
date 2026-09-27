@@ -255,7 +255,20 @@ struct HomeView: View {
         occurrence.scheduledAt = newTime
         occurrence.isPinned = true
         try? context.save()
-        Task { await coordinator.resync(context: context) }
+
+        let id = occurrence.id
+        let habit = occurrence.habit
+        Task {
+            // Put the alert on the schedule before the slow part. Moving a
+            // nudge and immediately locking the phone used to lose it: the
+            // resync had not finished when iOS suspended the app.
+            if let habit {
+                await NotificationService.scheduleNow(
+                    habit: habit, occurrenceID: id, fireAt: newTime
+                )
+            }
+            await coordinator.resync(context: context)
+        }
     }
 
     private func dismiss(_ occurrence: HabitOccurrence) {

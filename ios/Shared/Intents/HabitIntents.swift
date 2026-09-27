@@ -33,16 +33,21 @@ public struct CompleteHabitIntent: SetValueIntent, LiveActivityIntent {
 
     public func perform() async throws -> some IntentResult {
         psstLog.notice("CompleteHabitIntent fired for \(occurrenceID, privacy: .public)")
-        let id = UUID(uuidString: occurrenceID)
+        let hinted = UUID(uuidString: occurrenceID)
         // Repaint first. Opening the SwiftData store on a cold app process is
         // the slow step, and the card must not wait on it.
-        if let id { await NudgeActivity.resolve(occurrenceID: id) }
-        await OccurrenceWriter.resolve(
-            occurrenceID: id,
+        if let hinted { await NudgeActivity.resolve(occurrenceID: hinted) }
+        // The resolved id, not the hint: a recurring alarm's baked-in id
+        // matches nothing, and the queue has to advance from the real row.
+        let resolved = await OccurrenceWriter.resolveReturningID(
+            occurrenceID: hinted,
             habitID: UUID(uuidString: habitID),
             as: .completed
         )
-        if let id { await NudgeQueue.advance(after: id) }
+        if let resolved {
+            await NudgeActivity.resolve(occurrenceID: resolved)
+            await NudgeQueue.advance(after: resolved)
+        }
         return .result()
     }
 }
@@ -65,13 +70,21 @@ public struct SnoozeHabitIntent: LiveActivityIntent {
     public func perform() async throws -> some IntentResult {
         psstLog.notice("SnoozeHabitIntent fired for \(occurrenceID, privacy: .public)")
         let id = UUID(uuidString: occurrenceID)
-        guard let id else { return .result() }
+        let hinted = UUID(uuidString: occurrenceID)
         let until = Date.now.addingTimeInterval(TimeInterval(FollowUp.delayMinutes * 60))
-        // Repaint first: opening the store is the slow step and the card must
-        // not wait on it.
-        await NudgeActivity.resolve(occurrenceID: id, snoozedUntil: until)
-        await FollowUp.snooze(occurrenceID: id)
-        await NudgeQueue.advance(after: id)
+        if let hinted { await NudgeActivity.resolve(occurrenceID: hinted, snoozedUntil: until) }
+
+        // Resolve first so a recurring alarm's unmatched id still finds a row,
+        // then snooze that row. `snooze` re-marks it, which is harmless.
+        guard let resolved = await OccurrenceWriter.resolveReturningID(
+            occurrenceID: hinted,
+            habitID: UUID(uuidString: habitID),
+            as: .pending
+        ) else { return .result() }
+
+        await NudgeActivity.resolve(occurrenceID: resolved, snoozedUntil: until)
+        await FollowUp.snooze(occurrenceID: resolved)
+        await NudgeQueue.advance(after: resolved)
         return .result()
     }
 }
@@ -83,6 +96,47 @@ public struct SnoozeHabitIntent: LiveActivityIntent {
 public enum OccurrenceWriter {
     @MainActor
     public static func resolve(occurrenceID: UUID?, habitID: UUID?, as status: OccurrenceStatus) {
+        resolveReturningID(occurrenceID: occurrenceID, habitID: habitID, as: status)
+    }
+
+    /// Resolves an answer, returning the occurrence it actually landed on.
+    ///
+    /// The id is a hint, not a guarantee. AlarmKit alarms recur, so the intent
+    /// baked into one is reused for every future firing and cannot carry a
+    /// real occurrence id. When the id matches nothing, fall back to the
+    /// habit's nearest pending occurrence. Without this the alarm tier
+    /// recorded nothing at all and the in-app takeover kept asking again.
+    @MainActor
+    @discardableResult
+    public static func resolveReturningID(
+        occurrenceID: UUID?,
+        habitID: UUID?,
+        as status: OccurrenceStatus,
+        now: Date = .now
+    ) -> UUID? {
+        let context = PsstStore.shared.mainContext
+        guard let occurrence = OccurrenceMatcher.match(
+            occurrenceID: occurrenceID, habitID: habitID, in: context, now: now
+        ) else {
+            psstLog.error("no occurrence matched this answer")
+            return nil
+        }
+
+        if status == .skipped { occurrence.snoozeCount += 1 }
+        occurrence.status = status
+        occurrence.respondedAt = now
+        do {
+            try context.save()
+            psstLog.notice("saved \(status.rawValue, privacy: .public) for \(occurrence.id.uuidString, privacy: .public)")
+            WidgetSnapshot.reload()
+        } catch {
+            psstLog.error("save failed: \(error.localizedDescription, privacy: .public)")
+        }
+        return occurrence.id
+    }
+
+    @MainActor
+    private static func legacy(occurrenceID: UUID?, habitID: UUID?, as status: OccurrenceStatus) {
         guard let occurrenceID else {
             psstLog.error("resolve called with no occurrence id")
             return
@@ -113,5 +167,43 @@ public enum OccurrenceWriter {
         } catch {
             psstLog.error("save failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+}
+
+
+/// Decides which occurrence an answer belongs to.
+///
+/// Split out from `OccurrenceWriter` so the rule can be tested against an
+/// in-memory store without dragging in App Intents.
+nonisolated public enum OccurrenceMatcher {
+    /// How far from now an unmatched answer may reach.
+    public static let window: TimeInterval = 45 * 60
+
+    @MainActor
+    public static func match(
+        occurrenceID: UUID?,
+        habitID: UUID?,
+        in context: ModelContext,
+        now: Date
+    ) -> HabitOccurrence? {
+        if let occurrenceID {
+            let descriptor = FetchDescriptor<HabitOccurrence>(
+                predicate: #Predicate { $0.id == occurrenceID }
+            )
+            if let exact = try? context.fetch(descriptor).first { return exact }
+        }
+
+        guard let habitID else { return nil }
+        let all = (try? context.fetch(FetchDescriptor<HabitOccurrence>())) ?? []
+        return all
+            .filter {
+                $0.habit?.id == habitID
+                    && $0.status == .pending
+                    && abs($0.scheduledAt.timeIntervalSince(now)) < window
+            }
+            .min {
+                abs($0.scheduledAt.timeIntervalSince(now))
+                    < abs($1.scheduledAt.timeIntervalSince(now))
+            }
     }
 }
