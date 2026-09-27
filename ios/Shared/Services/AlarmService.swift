@@ -9,7 +9,7 @@ import SwiftUI
 /// long press *and* overrides Focus and silent mode. It keeps its own recurring
 /// schedule, so an every-weekday-at-7am habit is a single alarm rather than one
 /// request per occurrence, and it never touches the 64 notification budget.
-nonisolated enum AlarmService {
+nonisolated public enum AlarmService {
 
     /// AlarmKit throws `maximumLimitReached` at an undocumented ceiling. We
     /// stay conservative and surface a clear error rather than failing silently.

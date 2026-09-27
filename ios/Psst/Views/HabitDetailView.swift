@@ -269,7 +269,7 @@ struct HabitDetailView: View {
             .buttonStyle(.borderless)
             .listRowBackground(Theme.Palette.surface)
         } footer: {
-            Text(previewNote ?? "Fires in 10 seconds as a real \(habit.intensity.title) nudge. Lock your phone to see it the way you normally would.")
+            Text(previewNote ?? "Fires in 30 seconds as a real \(habit.intensity.title) nudge. Lock your phone to see it the way you normally would.")
         }
     }
 

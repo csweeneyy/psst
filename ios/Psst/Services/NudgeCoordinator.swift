@@ -64,16 +64,19 @@ final class NudgeCoordinator {
         // A nudge you moved by hand is part of the schedule, not noise. Fold
         // pinned occurrences into the plan so they still get a notification.
         let pinned = pinnedPending(context: context, now: now)
-        for occurrence in pinned where !occurrence.isFollowUp {
-            guard let habitID = occurrence.habit?.id, let habit = byID[habitID], !habit.isPaused else { continue }
-            let nudge = PlannedNudge(habitID: habitID, fireAt: occurrence.scheduledAt)
-            switch habit.intensity {
-            case .standard: plan.liveActivities.append(nudge)
-            case .alarm, .gentle: plan.notifications.append(nudge)
-            }
+        // Hand-moved, snoozed and previewed nudges are delivered directly
+        // through their tier rather than folded into the plan. The plan routed
+        // alarm-tier nudges to plain notifications, which is why previewing an
+        // Alarm habit produced a banner on top of the alarm.
+        for occurrence in pinned where !occurrence.deliveryScheduled {
+            guard let habitID = occurrence.habit?.id,
+                  let habit = byID[habitID], !habit.isPaused else { continue }
+            await NudgeDelivery.deliver(
+                habit: habit, occurrenceID: occurrence.id, at: occurrence.scheduledAt
+            )
+            occurrence.deliveryScheduled = true
         }
-        plan.notifications.sort { $0.fireAt < $1.fireAt }
-        plan.liveActivities.sort { $0.fireAt < $1.fireAt }
+        try? context.save()
 
         await LiveActivityService.dropOrphans(livingHabitIDs: Set(byID.keys))
 

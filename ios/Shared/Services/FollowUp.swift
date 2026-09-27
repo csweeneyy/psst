@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import UserNotifications
 
 /// Snoozing has to actually bring the nudge back.
 ///
@@ -30,8 +29,7 @@ nonisolated public enum FollowUp {
     public static func snooze(
         occurrenceID: UUID,
         container: ModelContainer = PsstStore.shared,
-        now: Date = .now,
-        center: UNUserNotificationCenter = .current()
+        now: Date = .now
     ) async -> Date? {
         guard PsstStore.isDegraded == false else {
             psstLog.error("refusing to snooze against a scratch store")
@@ -60,44 +58,21 @@ nonisolated public enum FollowUp {
         followUp.isPinned = true
         followUp.isFollowUp = true
         followUp.snoozeCount = attempts
+        followUp.deliveryScheduled = true
         context.insert(followUp)
         try? context.save()
 
-        await schedule(followUp: followUp, habit: habit, at: fireAt, center: center)
+        // Through the habit's own tier. Snoozing an alarm used to hand back a
+        // plain banner, which quietly downgraded the thing you told the app
+        // you could not miss.
+        await NudgeDelivery.deliver(
+            habit: habit, occurrenceID: followUp.id, at: fireAt, body: "Snoozed. Still owed."
+        )
         WidgetSnapshot.reload()
         psstLog.notice("snoozed \(habit.name, privacy: .public) to \(fireAt, privacy: .public)")
         return fireAt
     }
 
-    /// A plain notification regardless of the habit's tier. A follow-up has to
-    /// survive the app being suspended, and this is the one path that needs no
-    /// coordinator and no extra budget juggling.
-    @MainActor
-    private static func schedule(
-        followUp: HabitOccurrence,
-        habit: Habit,
-        at fireAt: Date,
-        center: UNUserNotificationCenter
-    ) async {
-        let content = UNMutableNotificationContent()
-        content.title = habit.nudgeCopy()
-        content.body = "Snoozed. Still owed."
-        content.sound = .default
-        content.categoryIdentifier = NotificationCategory.identifier
-        content.interruptionLevel = habit.intensity == .gentle ? .active : .timeSensitive
-        content.userInfo = [
-            NotificationCategory.habitKey: habit.id.uuidString,
-            NotificationCategory.occurrenceKey: followUp.id.uuidString,
-        ]
-
-        let interval = max(fireAt.timeIntervalSinceNow, 1)
-        let request = UNNotificationRequest(
-            identifier: identifier(for: followUp.id),
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
-        )
-        try? await center.add(request)
-    }
 }
 
 /// Category identifiers, shared so the intents and the app agree without the

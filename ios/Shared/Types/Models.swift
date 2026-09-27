@@ -99,6 +99,9 @@ public final class HabitOccurrence {
     /// position order, one after another.
     public var queueGroup: UUID?
     public var queuePosition: Int = 0
+    /// Set once this nudge has had its own alert scheduled outside the regular
+    /// plan, so a resync does not schedule it a second time.
+    public var deliveryScheduled: Bool = false
     public var habit: Habit?
 
     public init(id: UUID = UUID(), scheduledAt: Date, habit: Habit?) {
@@ -111,6 +114,7 @@ public final class HabitOccurrence {
         self.isFollowUp = false
         self.queueGroup = nil
         self.queuePosition = 0
+        self.deliveryScheduled = false
         self.habit = habit
     }
 

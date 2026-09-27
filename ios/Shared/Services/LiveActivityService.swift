@@ -6,7 +6,7 @@ import Foundation
 /// iOS 26 can start a Live Activity at a future date with the app in the
 /// background, so this needs no server and no push. The Lock Screen card
 /// renders Done and Snooze inline, with no long press.
-nonisolated enum LiveActivityService {
+nonisolated public enum LiveActivityService {
 
     enum ServiceError: Error {
         case disabled
@@ -111,6 +111,45 @@ nonisolated enum LiveActivityService {
     /// on the Lock Screen for Apple's default four hours.
     static func dismiss(occurrenceID: UUID) async {
         await NudgeActivity.resolve(occurrenceID: occurrenceID)
+    }
+
+    /// One scheduled card, for a nudge outside the regular plan: a preview, a
+    /// snooze follow-up, or a hand-moved reminder. Returns a reason on
+    /// failure, `nil` on success.
+    @MainActor
+    static func scheduleOne(
+        habit: Habit, occurrenceID: UUID, at fireAt: Date
+    ) async -> String? {
+        guard isAvailable else { return "Live Activities are off for Psst in Settings." }
+        let copy = habit.nudgeCopy()
+        do {
+            _ = try Activity.request(
+                attributes: NudgeAttributes(
+                    habitID: habit.id,
+                    occurrenceID: occurrenceID,
+                    habitName: habit.name,
+                    nudgeText: copy,
+                    symbol: habit.symbol,
+                    tintHex: habit.tintHex
+                ),
+                content: ActivityContent(
+                    state: NudgeAttributes.ContentState(),
+                    staleDate: fireAt.addingTimeInterval(45 * 60)
+                ),
+                pushType: nil,
+                style: .standard,
+                alertConfiguration: AlertConfiguration(
+                    title: LocalizedStringResource(stringLiteral: copy),
+                    body: "Tap Done when you have.",
+                    sound: .default
+                ),
+                start: fireAt
+            )
+            return nil
+        } catch {
+            psstLog.error("one-off activity refused: \(error.localizedDescription, privacy: .public)")
+            return error.localizedDescription
+        }
     }
 
     /// Clears anything belonging to habits that no longer exist. Without this a

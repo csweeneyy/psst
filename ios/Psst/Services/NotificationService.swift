@@ -106,32 +106,6 @@ nonisolated enum NotificationService {
         return .success(wanted.count)
     }
 
-    /// Puts one nudge on the schedule right now, ahead of any full resync.
-    ///
-    /// Used when the user moves a reminder by hand: the alert has to exist
-    /// before they lock the phone, and a resync takes long enough that it may
-    /// not survive being suspended.
-    @discardableResult
-    static func scheduleNow(
-        habit: Habit,
-        occurrenceID: UUID,
-        fireAt: Date,
-        on center: UNUserNotificationCenter = .current()
-    ) async -> Bool {
-        guard fireAt.timeIntervalSinceNow > 0 else { return false }
-        let id = identifier(habitID: habit.id, fireAt: fireAt)
-        do {
-            try await center.add(
-                request(id: id, habit: habit, occurrenceID: occurrenceID, fireAt: fireAt)
-            )
-            psstLog.notice("scheduled \(habit.name, privacy: .public) for \(fireAt, privacy: .public)")
-            return true
-        } catch {
-            psstLog.error("immediate schedule failed: \(error.localizedDescription, privacy: .public)")
-            return false
-        }
-    }
-
     private static func request(
         id: String, habit: Habit, occurrenceID: UUID, fireAt: Date
     ) -> UNNotificationRequest {

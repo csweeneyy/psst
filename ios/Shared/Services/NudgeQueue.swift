@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import UserNotifications
 
 /// Keeps a pile-up moving.
 ///
@@ -48,8 +47,7 @@ nonisolated public enum NudgeQueue {
     @discardableResult
     public static func advance(
         after occurrenceID: UUID,
-        container: ModelContainer = PsstStore.shared,
-        center: UNUserNotificationCenter = .current()
+        container: ModelContainer = PsstStore.shared
     ) async -> UUID? {
         guard PsstStore.isDegraded == false else { return nil }
         let context = container.mainContext
@@ -63,46 +61,21 @@ nonisolated public enum NudgeQueue {
         let fireAt = Date.now.addingTimeInterval(followOnDelay)
         follower.scheduledAt = fireAt
         follower.isPinned = true
+        follower.deliveryScheduled = true
         try? context.save()
 
-        await schedule(follower, habit: habit, at: fireAt, center: center)
+        // Honours the tier where it can. A follow-on lands seconds from now,
+        // and neither a scheduled Live Activity nor an alarm can be created
+        // that close, so `NudgeDelivery` will report a degrade and send a
+        // banner. Getting the nudge in front of the user wins over the tier
+        // for this one arrival.
+        await NudgeDelivery.deliver(
+            habit: habit, occurrenceID: follower.id, at: fireAt, body: "Next one."
+        )
         psstLog.notice(
             "advanced queued \(habit.name, privacy: .public) to \(fireAt, privacy: .public)"
         )
         return follower.id
     }
 
-    /// A plain notification regardless of tier.
-    ///
-    /// A follow-on lands seconds from now, and neither a scheduled Live
-    /// Activity nor an AlarmKit alarm can be created that close to its fire
-    /// time reliably. Getting the nudge in front of the user matters more
-    /// than honouring its tier for this one arrival.
-    @MainActor
-    private static func schedule(
-        _ occurrence: HabitOccurrence,
-        habit: Habit,
-        at fireAt: Date,
-        center: UNUserNotificationCenter
-    ) async {
-        let content = UNMutableNotificationContent()
-        content.title = habit.nudgeCopy()
-        content.body = "Next one."
-        content.sound = .default
-        content.categoryIdentifier = NotificationCategory.identifier
-        content.interruptionLevel = habit.intensity == .gentle ? .active : .timeSensitive
-        content.userInfo = [
-            NotificationCategory.habitKey: habit.id.uuidString,
-            NotificationCategory.occurrenceKey: occurrence.id.uuidString,
-        ]
-
-        let request = UNNotificationRequest(
-            identifier: identifierPrefix + occurrence.id.uuidString,
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(
-                timeInterval: max(fireAt.timeIntervalSinceNow, 1), repeats: false
-            )
-        )
-        try? await center.add(request)
-    }
 }

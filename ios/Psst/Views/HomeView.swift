@@ -265,6 +265,7 @@ struct HomeView: View {
     private func move(_ occurrence: HabitOccurrence, to newTime: Date) {
         occurrence.scheduledAt = newTime
         occurrence.isPinned = true
+        occurrence.deliveryScheduled = true
         try? context.save()
 
         let id = occurrence.id
@@ -274,9 +275,7 @@ struct HomeView: View {
             // nudge and immediately locking the phone used to lose it: the
             // resync had not finished when iOS suspended the app.
             if let habit {
-                await NotificationService.scheduleNow(
-                    habit: habit, occurrenceID: id, fireAt: newTime
-                )
+                await NudgeDelivery.deliver(habit: habit, occurrenceID: id, at: newTime)
             }
             await coordinator.resync(context: context)
         }

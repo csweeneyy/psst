@@ -234,6 +234,14 @@ weekly review, and apply in one tap.
   once made every habit appear deleted.
 - Never let an empty list and a failed load look the same. Home distinguishes
   them explicitly.
+- **Every path that puts a nudge in front of the user goes through
+  `NudgeDelivery`.** Picking a tier per habit is the product, so a path that
+  quietly sends a banner instead is a product bug, not a shortcut. Three did:
+  the preview, snooze follow-ups, and pinned occurrences folded into the plan.
+  A downgrade is allowed only when the API genuinely cannot accept the date,
+  and it must report the reason.
+- `AlarmService` and `LiveActivityService` live in `Shared` because
+  `NudgeDelivery` is reached from intent code compiled into both targets.
 - `resync` must purge as well as add. `SchedulingService.stale` decides what
   the new plan orphaned; skipping it leaves the old schedule's rows on Home and
   makes every habit edit look like a no-op. Regression: `ReconciliationTests`.
