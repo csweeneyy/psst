@@ -9,7 +9,7 @@ nonisolated enum Mutation: Codable, Sendable {
     case pauseHabit(habitID: UUID, paused: Bool)
     case deleteHabit(habitID: UUID)
     /// Rename, reword the nudge, change its icon or colour. Every field optional.
-    case updateHabit(habitID: UUID, name: String?, nudgeText: String?, symbol: String?, tintHex: String?)
+    case updateHabit(habitID: UUID, name: String?, nudgeText: String?, nudgeVariants: [String]?, symbol: String?, tintHex: String?)
     case setNotes(habitID: UUID, notes: String)
     /// Mark a whole day answered. `habitID` nil means every habit that day.
     case logDay(habitID: UUID?, day: String, status: OccurrenceStatus)
@@ -31,7 +31,7 @@ nonisolated enum Mutation: Codable, Sendable {
     /// produces. See `worker/src/services/assistant.ts`.
     private enum CodingKeys: String, CodingKey {
         case type, habit, habitID, schedule, intensity, paused
-        case name, nudgeText, symbol, tintHex, notes, day, status, from, to, minutes
+        case name, nudgeText, nudgeVariants, symbol, tintHex, notes, day, status, from, to, minutes
     }
 
     init(from decoder: any Decoder) throws {
@@ -61,6 +61,7 @@ nonisolated enum Mutation: Codable, Sendable {
                 habitID: try c.decode(UUID.self, forKey: .habitID),
                 name: try c.decodeIfPresent(String.self, forKey: .name),
                 nudgeText: try c.decodeIfPresent(String.self, forKey: .nudgeText),
+                nudgeVariants: try c.decodeIfPresent([String].self, forKey: .nudgeVariants),
                 symbol: try c.decodeIfPresent(String.self, forKey: .symbol),
                 tintHex: try c.decodeIfPresent(String.self, forKey: .tintHex)
             )
@@ -114,11 +115,12 @@ nonisolated enum Mutation: Codable, Sendable {
         case .deleteHabit(let id):
             try c.encode("deleteHabit", forKey: .type)
             try c.encode(id, forKey: .habitID)
-        case .updateHabit(let id, let name, let nudgeText, let symbol, let tintHex):
+        case .updateHabit(let id, let name, let nudgeText, let variants, let symbol, let tintHex):
             try c.encode("updateHabit", forKey: .type)
             try c.encode(id, forKey: .habitID)
             try c.encodeIfPresent(name, forKey: .name)
             try c.encodeIfPresent(nudgeText, forKey: .nudgeText)
+            try c.encodeIfPresent(variants, forKey: .nudgeVariants)
             try c.encodeIfPresent(symbol, forKey: .symbol)
             try c.encodeIfPresent(tintHex, forKey: .tintHex)
         case .setNotes(let id, let notes):

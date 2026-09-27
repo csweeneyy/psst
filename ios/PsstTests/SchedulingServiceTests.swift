@@ -175,37 +175,74 @@ struct SchedulingServiceTests {
         }
     }
 
-    @Test("Nudges from different habits are pushed apart")
-    func collidingHabitsAreSpread() {
+    @Test("Colliding habits become an ordered queue, and none are dropped")
+    func collidingHabitsAreQueued() {
         let a = UUID()
         let b = UUID()
         let c = UUID()
         let moment = at(2026, 3, 2, 9)
-        let spread = SchedulingService.spread([
-            PlannedNudge(habitID: a, fireAt: moment),
-            PlannedNudge(habitID: b, fireAt: moment),
-            PlannedNudge(habitID: c, fireAt: moment),
-        ])
-        #expect(spread.count == 3)
-        for (earlier, later) in zip(spread, spread.dropFirst()) {
-            #expect(
-                later.fireAt.timeIntervalSince(earlier.fireAt)
-                    >= TimeInterval(SchedulingService.collisionGapMinutes * 60)
-            )
+        let plan = SchedulingService.queued(NudgePlan(
+            notifications: [
+                PlannedNudge(habitID: a, fireAt: moment),
+                PlannedNudge(habitID: b, fireAt: moment),
+            ],
+            liveActivities: [PlannedNudge(habitID: c, fireAt: moment)]
+        ))
+
+        let all = plan.notifications + plan.liveActivities + plan.alarms
+        #expect(all.count == 3, "a collision must never drop a nudge")
+
+        // Exactly one keeps the time it asked for; the rest follow it.
+        let onTime = all.filter { $0.fireAt == $0.wantedAt }
+        #expect(onTime.count == 1)
+
+        let times = all.map(\.fireAt).sorted()
+        for (earlier, later) in zip(times, times.dropFirst()) {
+            #expect(later.timeIntervalSince(earlier) >= SchedulingService.queueGapSeconds)
         }
-        // The soonest one keeps the time the user actually chose.
-        #expect(spread.first?.fireAt == moment)
+        // All three share a group, positioned 0, 1, 2.
+        #expect(Set(all.compactMap(\.group)).count == 1)
+        #expect(Set(all.map(\.queuePosition)) == [0, 1, 2])
+    }
+
+    @Test("An alarm colliding with a notification is queued too")
+    func collisionsCrossTiers() {
+        let quiet = UUID()
+        let loud = UUID()
+        let moment = at(2026, 3, 2, 7)
+        let plan = SchedulingService.queued(NudgePlan(
+            notifications: [PlannedNudge(habitID: quiet, fireAt: moment)],
+            alarms: [PlannedNudge(habitID: loud, fireAt: moment)]
+        ))
+        let all = plan.notifications + plan.alarms
+        #expect(all.count == 2)
+        #expect(Set(all.map(\.fireAt)).count == 2, "two tiers must not fire together")
     }
 
     @Test("A habit's own tight cadence is left alone")
-    func oneHabitIsNotSpread() {
+    func oneHabitIsNotQueued() {
         // Spacing within a habit is the user's `minIntervalMinutes` decision.
         let habit = UUID()
         let base = at(2026, 3, 2, 9)
         let input = (0..<4).map {
-            PlannedNudge(habitID: habit, fireAt: base.addingTimeInterval(Double($0) * 60))
+            PlannedNudge(habitID: habit, fireAt: base.addingTimeInterval(Double($0) * 30))
         }
-        #expect(SchedulingService.spread(input) == input)
+        let plan = SchedulingService.queued(NudgePlan(notifications: input))
+        #expect(plan.notifications.map(\.fireAt) == input.map(\.fireAt))
+    }
+
+    @Test("A queued nudge never lands earlier than the one it follows")
+    func queueOrderIsStable() {
+        let first = UUID()
+        let second = UUID()
+        let moment = at(2026, 3, 2, 12)
+        let plan = SchedulingService.queued(NudgePlan(notifications: [
+            PlannedNudge(habitID: first, fireAt: moment),
+            PlannedNudge(habitID: second, fireAt: moment.addingTimeInterval(20)),
+        ]))
+        let sorted = plan.notifications.sorted { $0.queuePosition < $1.queuePosition }
+        #expect(sorted[0].fireAt < sorted[1].fireAt)
+        #expect(sorted[0].fireAt == moment)
     }
 
     @Test("Paused habits generate nothing at all")

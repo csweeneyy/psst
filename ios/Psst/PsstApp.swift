@@ -63,9 +63,13 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate {
         switch response.actionIdentifier {
         case NotificationService.completeAction:
             OccurrenceWriter.resolve(occurrenceID: occurrenceID, habitID: habitID, as: .completed)
+            if let occurrenceID {
+                await NudgeQueue.advance(after: occurrenceID)
+            }
         case NotificationService.snoozeAction:
             if let occurrenceID {
                 await FollowUp.snooze(occurrenceID: occurrenceID)
+                await NudgeQueue.advance(after: occurrenceID)
             }
         case UNNotificationDefaultActionIdentifier:
             if response.notification.request.content.categoryIdentifier == WeeklyReviewService.categoryID {

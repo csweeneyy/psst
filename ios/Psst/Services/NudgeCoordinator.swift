@@ -84,7 +84,7 @@ final class NudgeCoordinator {
         }
 
         if habits.contains(where: { $0.intensity == .alarm && !$0.isPaused }) {
-            switch await AlarmService.sync(habits) {
+            switch await AlarmService.sync(habits, plan: plan) {
             case .success(let count): scheduledAlarms = count
             case .failure(.notAuthorized): scheduledAlarms = 0
             case .failure(.limitReached): lastError = "Hit the alarm limit. Move a habit down to Standard."
@@ -131,11 +131,16 @@ final class NudgeCoordinator {
         for nudge in all {
             let k = key(nudge.habitID, nudge.fireAt)
             if let found = index[k] {
+                // Group membership can change between syncs as habits move.
+                found.queueGroup = nudge.group
+                found.queuePosition = nudge.queuePosition
                 result[nudge] = found.id
                 continue
             }
             guard let habit = habits[nudge.habitID] else { continue }
             let occurrence = HabitOccurrence(scheduledAt: nudge.fireAt, habit: habit)
+            occurrence.queueGroup = nudge.group
+            occurrence.queuePosition = nudge.queuePosition
             context.insert(occurrence)
             index[k] = occurrence
             result[nudge] = occurrence.id

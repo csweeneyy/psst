@@ -76,7 +76,7 @@ nonisolated public enum FollowUp {
         center: UNUserNotificationCenter
     ) async {
         let content = UNMutableNotificationContent()
-        content.title = habit.nudgeText
+        content.title = habit.nudgeCopy()
         content.body = "Snoozed. Still owed."
         content.sound = .default
         content.categoryIdentifier = NotificationCategory.identifier

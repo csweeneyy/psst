@@ -270,15 +270,18 @@ struct HomeView: View {
 
     private func resolve(_ occurrence: HabitOccurrence, _ status: OccurrenceStatus) {
         let id = occurrence.id
+        let wasShowing = firing?.id == id
+
         if status == .skipped {
             // Later means later, not cancelled.
-            withAnimation(Theme.motion) { if firing?.id == id { firing = nil } }
+            withAnimation(Theme.motion) { if wasShowing { firing = nil } }
             Task {
                 await NudgeActivity.resolve(
                     occurrenceID: id,
                     snoozedUntil: .now.addingTimeInterval(TimeInterval(FollowUp.delayMinutes * 60))
                 )
                 await FollowUp.snooze(occurrenceID: id)
+                await chain(after: id, wasShowing: wasShowing)
                 await coordinator.resync(context: context)
             }
             return
@@ -287,13 +290,25 @@ struct HomeView: View {
         withAnimation(Theme.motion) {
             occurrence.status = status
             occurrence.respondedAt = .now
-            if firing?.id == id { firing = nil }
+            if wasShowing { firing = nil }
         }
         try? context.save()
         Task {
             await NudgeActivity.resolve(occurrenceID: id)
+            await chain(after: id, wasShowing: wasShowing)
             await coordinator.resync(context: context)
         }
+    }
+
+    /// With the app open no notification fires, so a queued nudge would sit
+    /// unseen until the next tick. Raise its takeover straight away instead.
+    private func chain(after id: UUID, wasShowing: Bool) async {
+        guard let followerID = await NudgeQueue.advance(after: id), wasShowing else { return }
+        // A beat, so one card does not appear to morph into the next.
+        try? await Task.sleep(for: .milliseconds(320))
+        guard let follower = occurrences.first(where: { $0.id == followerID }) else { return }
+        clock = .now
+        withAnimation(Theme.motion) { firing = follower }
     }
 }
 

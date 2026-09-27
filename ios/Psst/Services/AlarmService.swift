@@ -41,19 +41,36 @@ nonisolated enum AlarmService {
 
     /// One alarm per distinct clock time per habit, recurring on the habit's
     /// weekdays. Deterministic ids so a resync replaces rather than duplicates.
+    /// Clock times are taken from the plan, not recomputed from each habit.
+    ///
+    /// The plan has already resolved collisions across every tier, so an alarm
+    /// that wanted the same minute as a Lock Screen card has been pushed to
+    /// follow it. Recomputing here would undo that and let two alarms go off
+    /// together.
     static func sync(
         _ habits: [Habit],
+        plan: NudgePlan,
         calendar: Calendar = .current
     ) async -> Result<Int, ServiceError> {
         guard authorization == .authorized else { return .failure(.notAuthorized) }
         cancelAll()
 
+        var plannedMinutes: [UUID: Set<Int>] = [:]
+        for nudge in plan.alarms {
+            let parts = calendar.dateComponents([.hour, .minute], from: nudge.fireAt)
+            plannedMinutes[nudge.habitID, default: []]
+                .insert((parts.hour ?? 0) * 60 + (parts.minute ?? 0))
+        }
+
         var count = 0
         for habit in habits where habit.intensity == .alarm && !habit.isPaused {
             let schedule = habit.schedule
-            let minutes = SchedulingService.minuteOffsets(
-                for: schedule, calendar: calendar, day: calendar.startOfDay(for: .now)
-            )
+            let minutes = (plannedMinutes[habit.id].map { Array($0).sorted() } ?? [])
+                .isEmpty
+                ? SchedulingService.minuteOffsets(
+                    for: schedule, calendar: calendar, day: calendar.startOfDay(for: .now)
+                )
+                : Array(plannedMinutes[habit.id] ?? []).sorted()
             let weekdays = schedule.weekdays.sorted().compactMap(Self.weekday)
 
             for minute in minutes {
@@ -98,7 +115,7 @@ nonisolated enum AlarmService {
     /// The secondary button is `.custom` so Snooze runs our intent and writes a
     /// real skip to the store, instead of AlarmKit's opaque built-in countdown.
     private static func alert(for habit: Habit) -> AlarmPresentation.Alert {
-        let title = LocalizedStringResource(stringLiteral: habit.nudgeText)
+        let title = LocalizedStringResource(stringLiteral: habit.nudgeCopy())
         let snooze = AlarmButton(
             text: "\(FollowUp.delayMinutes) min", textColor: .white, systemImageName: "clock"
         )

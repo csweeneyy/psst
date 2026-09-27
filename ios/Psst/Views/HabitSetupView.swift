@@ -10,6 +10,7 @@ struct HabitSetupView: View {
 
     @State private var name = ""
     @State private var nudgeText = ""
+    @State private var nudgeVariants = ""
     @State private var intensity: Intensity = .standard
     @State private var mode: Mode = .interval
     @State private var intervalMinutes = 120
@@ -138,6 +139,16 @@ struct HabitSetupView: View {
                 .lineLimit(1...3)
                 .padding(Theme.Space.m)
                 .card()
+
+            FieldLabel(text: "Other ways to say it")
+            TextField("One per line", text: $nudgeVariants, axis: .vertical)
+                .font(Theme.body(16))
+                .lineLimit(2...6)
+                .padding(Theme.Space.m)
+                .card()
+            Text("Picked at random so it never reads the same twice.")
+                .font(Theme.footnote(13))
+                .foregroundStyle(Theme.Palette.inkSoft)
         }
     }
 
@@ -437,6 +448,7 @@ struct HabitSetupView: View {
         }
         name = habit.name
         nudgeText = habit.nudgeText
+        nudgeVariants = habit.nudgeVariantsRaw
         intensity = habit.intensity
         symbol = habit.symbol
         tintHex = habit.tintHex
@@ -467,15 +479,18 @@ struct HabitSetupView: View {
         if let habit {
             habit.name = name
             habit.nudgeText = copy
+            habit.nudgeVariantsRaw = nudgeVariants
             habit.intensity = resolved
             habit.schedule = builtSchedule
             habit.symbol = symbol
             habit.tintHex = tintHex
         } else {
-            context.insert(Habit(
+            let created = Habit(
                 name: name, nudgeText: copy, intensity: resolved,
                 schedule: builtSchedule, symbol: symbol, tintHex: tintHex
-            ))
+            )
+            created.nudgeVariantsRaw = nudgeVariants
+            context.insert(created)
         }
         try? context.save()
         await onSave()

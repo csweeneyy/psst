@@ -62,11 +62,12 @@ nonisolated enum LiveActivityService {
                 continue
             }
 
+            let copy = habit.nudgeCopy()
             let attributes = NudgeAttributes(
                 habitID: habit.id,
                 occurrenceID: occurrenceID,
                 habitName: habit.name,
-                nudgeText: habit.nudgeText,
+                nudgeText: copy,
                 symbol: habit.symbol,
                 tintHex: habit.tintHex
             )
@@ -77,7 +78,7 @@ nonisolated enum LiveActivityService {
                 staleDate: nudge.fireAt.addingTimeInterval(45 * 60)
             )
             let alert = AlertConfiguration(
-                title: LocalizedStringResource(stringLiteral: habit.nudgeText),
+                title: LocalizedStringResource(stringLiteral: copy),
                 body: "Tap Done when you have.",
                 sound: .default
             )

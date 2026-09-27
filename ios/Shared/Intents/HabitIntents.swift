@@ -42,6 +42,7 @@ public struct CompleteHabitIntent: SetValueIntent, LiveActivityIntent {
             habitID: UUID(uuidString: habitID),
             as: .completed
         )
+        if let id { await NudgeQueue.advance(after: id) }
         return .result()
     }
 }
@@ -70,6 +71,7 @@ public struct SnoozeHabitIntent: LiveActivityIntent {
         // not wait on it.
         await NudgeActivity.resolve(occurrenceID: id, snoozedUntil: until)
         await FollowUp.snooze(occurrenceID: id)
+        await NudgeQueue.advance(after: id)
         return .result()
     }
 }

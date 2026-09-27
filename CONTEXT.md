@@ -206,10 +206,17 @@ weekly review, and apply in one tap.
 - `Button(role: .destructive)` inside `swipeActions` animates the row out as
   soon as the swipe completes. If the delete is gated behind a confirmation,
   use a plain button with `.tint(.red)` or the row flickers away and back.
-- Nudges from different habits are spread at least
-  `SchedulingService.collisionGapMinutes` apart. A single habit's own cadence
-  is never touched: that is its `minIntervalMinutes`, set deliberately.
-  AlarmKit is the known gap; it schedules from each habit, not from the plan.
+- Colliding nudges are queued by `SchedulingService.queued`, across every tier
+  at once. `AlarmService` takes its clock times from `plan.alarms` rather than
+  recomputing from each habit, or it would undo the queue. A single habit's own
+  cadence is never treated as a collision: that is its `minIntervalMinutes`.
+- The queue never affects delivery. Every nudge is pre-scheduled with the OS at
+  its staggered slot; `NudgeQueue.advance` only ever makes the next one arrive
+  sooner. Nothing depends on the app being alive.
+- **There is no API for a notification's vibration pattern.** Not in
+  `UNMutableNotificationContent`, not in `UNNotificationSound`, not in AlarmKit
+  or ActivityKit, and CoreHaptics cannot run suspended. Varying the words is
+  the available lever; varying the sound file is the other one.
 - `resync` must purge as well as add. `SchedulingService.stale` decides what
   the new plan orphaned; skipping it leaves the old schedule's rows on Home and
   makes every habit edit look like a no-op. Regression: `ReconciliationTests`.

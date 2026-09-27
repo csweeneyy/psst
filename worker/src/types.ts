@@ -83,6 +83,7 @@ export type Mutation =
       habitID: string;
       name?: string;
       nudgeText?: string;
+      nudgeVariants?: string[];
       symbol?: string;
       tintHex?: string;
     }

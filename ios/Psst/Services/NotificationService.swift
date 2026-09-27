@@ -67,7 +67,7 @@ nonisolated enum NotificationService {
         // Everything except the requests this sync does not own: snooze
         // follow-ups, scheduled by whichever process handled the tap, and the
         // repeating weekly review.
-        let preserved = [FollowUp.identifierPrefix, "psst.review."]
+        let preserved = [FollowUp.identifierPrefix, NudgeQueue.identifierPrefix, "psst.review."]
         let pending = await center.pendingNotificationRequests()
         let replaceable = pending
             .map(\.identifier)
@@ -79,7 +79,7 @@ nonisolated enum NotificationService {
             guard let habit = habits[nudge.habitID] else { continue }
 
             let content = UNMutableNotificationContent()
-            content.title = habit.nudgeText
+            content.title = habit.nudgeCopy()
             content.body = "Tap to log it."
             content.sound = .default
             content.categoryIdentifier = categoryID

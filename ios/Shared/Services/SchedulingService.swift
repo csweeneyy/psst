@@ -3,9 +3,26 @@ import Foundation
 nonisolated public struct PlannedNudge: Hashable, Sendable {
     public let habitID: UUID
     public let fireAt: Date
-    public init(habitID: UUID, fireAt: Date) {
+    /// The moment the habit's own schedule asked for, before any collision
+    /// handling. Kept so the queue can be explained and tested.
+    public let wantedAt: Date
+    /// Nudges that wanted the same moment share a group.
+    public let group: UUID?
+    /// 0 is the one that fires on time; 1 and up follow it.
+    public let queuePosition: Int
+
+    public init(
+        habitID: UUID,
+        fireAt: Date,
+        wantedAt: Date? = nil,
+        group: UUID? = nil,
+        queuePosition: Int = 0
+    ) {
         self.habitID = habitID
         self.fireAt = fireAt
+        self.wantedAt = wantedAt ?? fireAt
+        self.group = group
+        self.queuePosition = queuePosition
     }
 }
 
@@ -135,41 +152,80 @@ nonisolated public enum SchedulingService {
         }
         plan.notifications = allocate(byHabit, limit: pendingNotificationLimit)
 
-        // Two habits landing on the same minute is common: 9 AM is a popular
-        // time. Three banners arriving together is one interruption the user
-        // cannot triage, and three Live Activities at once will exhaust the
-        // undocumented concurrency limit outright.
-        plan.notifications = spread(plan.notifications)
-        plan.liveActivities = spread(plan.liveActivities)
+        // Collisions are resolved across every tier at once. An alarm and a
+        // Lock Screen card landing on the same minute is the same problem as
+        // two banners, and splitting the logic per tier let that through.
+        plan = queued(plan)
 
         return plan
     }
 
-    /// Minimum gap between nudges from *different* habits.
-    public static let collisionGapMinutes = 2
+    /// Nudges landing closer together than this are treated as a collision.
+    public static let collisionWindow: TimeInterval = 60
+    /// How far apart queued nudges are placed. Close enough to read as "one
+    /// after another", far enough that they are two distinct interruptions.
+    public static let queueGapSeconds: TimeInterval = 45
 
-    /// Pushes colliding nudges apart, earliest kept in place.
+    /// Turns simultaneous nudges into an ordered queue.
     ///
-    /// Only across habits: a single habit's own spacing is already governed by
-    /// its `minIntervalMinutes`, and moving those would undo the user's choice.
-    static func spread(_ nudges: [PlannedNudge]) -> [PlannedNudge] {
-        let gap = TimeInterval(collisionGapMinutes * 60)
-        var placed: [PlannedNudge] = []
-        var lastByTime: Date?
+    /// The first keeps the time its habit asked for. The rest are pushed to
+    /// follow it, and carry the group and position that let the app pull the
+    /// next one forward the moment its predecessor is answered.
+    ///
+    /// Everything is still pre-scheduled with the operating system, so nothing
+    /// depends on the app being alive: if you never answer the first, the
+    /// second still fires on its own. The queue only ever makes a nudge
+    /// arrive sooner, never later than its staggered slot, and never drops one.
+    static func queued(_ plan: NudgePlan) -> NudgePlan {
+        struct Slot { let bucket: Int; let nudge: PlannedNudge }
+
+        var slots: [Slot] =
+            plan.notifications.map { Slot(bucket: 0, nudge: $0) }
+            + plan.liveActivities.map { Slot(bucket: 1, nudge: $0) }
+            + plan.alarms.map { Slot(bucket: 2, nudge: $0) }
+        slots.sort { $0.nudge.wantedAt < $1.nudge.wantedAt }
+
+        var result = NudgePlan()
+        var anchor: Date?
+        var group: UUID?
+        var position = 0
+        var lastPlaced: Date?
         var lastHabit: UUID?
 
-        for nudge in nudges.sorted(by: { $0.fireAt < $1.fireAt }) {
-            var fireAt = nudge.fireAt
-            if let previous = lastByTime,
-               lastHabit != nudge.habitID,
-               fireAt.timeIntervalSince(previous) < gap {
-                fireAt = previous.addingTimeInterval(gap)
+        for slot in slots {
+            let wanted = slot.nudge.wantedAt
+            let collides = anchor.map { wanted.timeIntervalSince($0) < collisionWindow } ?? false
+            // A habit's own cadence is its `minIntervalMinutes` decision, so
+            // back-to-back nudges from one habit are never treated as a clash.
+            let sameHabit = lastHabit == slot.nudge.habitID
+
+            let fireAt: Date
+            if collides && !sameHabit, let previous = lastPlaced {
+                position += 1
+                fireAt = previous.addingTimeInterval(queueGapSeconds)
+            } else {
+                anchor = wanted
+                group = UUID()
+                position = 0
+                fireAt = wanted
             }
-            placed.append(PlannedNudge(habitID: nudge.habitID, fireAt: fireAt))
-            lastByTime = fireAt
-            lastHabit = nudge.habitID
+
+            let placed = PlannedNudge(
+                habitID: slot.nudge.habitID,
+                fireAt: fireAt,
+                wantedAt: wanted,
+                group: position == 0 && !collides ? group : group,
+                queuePosition: position
+            )
+            switch slot.bucket {
+            case 0: result.notifications.append(placed)
+            case 1: result.liveActivities.append(placed)
+            default: result.alarms.append(placed)
+            }
+            lastPlaced = fireAt
+            lastHabit = slot.nudge.habitID
         }
-        return placed
+        return result
     }
 
     /// Fair-share allocation.

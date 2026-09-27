@@ -143,6 +143,12 @@ export const tools = [
         habitID: { type: "string" },
         name: { type: "string", description: "Short label." },
         nudgeText: { type: "string", description: "Exact Lock Screen copy." },
+        nudgeVariants: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Alternative phrasings, picked at random so the notification never reads the same twice. Keep them in the same voice as nudgeText.",
+        },
         symbol: { type: "string", description: "SF Symbol name." },
         tintHex: {
           type: "string",
@@ -292,6 +298,15 @@ export function toMutation(
       for (const field of fields) {
         if (typeof input[field] === "string" && input[field] !== "") {
           mutation[field] = input[field] as string;
+          changed = true;
+        }
+      }
+      if (Array.isArray(input.nudgeVariants)) {
+        const variants = input.nudgeVariants
+          .filter((v): v is string => typeof v === "string" && v.trim() !== "")
+          .map((v) => v.trim());
+        if (variants.length > 0) {
+          mutation.nudgeVariants = variants;
           changed = true;
         }
       }

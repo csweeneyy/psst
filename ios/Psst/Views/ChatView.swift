@@ -511,10 +511,11 @@ enum MutationApplier {
                 lines.append("Removed \(habit.name)")
                 context.delete(habit)
 
-            case .updateHabit(let id, let name, let nudgeText, let symbol, let tintHex):
+            case .updateHabit(let id, let name, let nudgeText, let variants, let symbol, let tintHex):
                 guard let habit = byID[id] else { continue }
                 if let name { habit.name = name }
                 if let nudgeText { habit.nudgeText = nudgeText }
+                if let variants { habit.nudgeVariantsRaw = variants.joined(separator: "\n") }
                 if let symbol { habit.symbol = symbol }
                 if let tintHex { habit.tintHex = tintHex }
                 lines.append("Updated \(habit.name)")

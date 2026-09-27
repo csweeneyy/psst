@@ -15,6 +15,12 @@ public final class Habit {
     public var tintHex: String
     /// Free text you keep with the habit. Why it matters, what counts as done.
     public var notes: String = ""
+    /// Alternative phrasings, one per line.
+    ///
+    /// iOS exposes no way to vary a notification's vibration, so the only
+    /// lever against "oh, it's that app again" is the words. A habit that says
+    /// something slightly different each time stays readable for longer.
+    public var nudgeVariantsRaw: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \HabitOccurrence.habit)
     public var occurrences: [HabitOccurrence]
@@ -38,7 +44,25 @@ public final class Habit {
         self.symbol = symbol
         self.tintHex = tintHex
         self.notes = ""
+        self.nudgeVariantsRaw = ""
         self.occurrences = []
+    }
+
+    /// Every phrasing this habit can use, primary first.
+    public var nudgeVariants: [String] {
+        [nudgeText] + nudgeVariantsRaw
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// A phrasing for one firing. Avoids repeating `previous` where it can, so
+    /// two nudges in a row never read identically.
+    public func nudgeCopy(avoiding previous: String? = nil) -> String {
+        let options = nudgeVariants
+        guard options.count > 1 else { return nudgeText }
+        let candidates = options.filter { $0 != previous }
+        return (candidates.isEmpty ? options : candidates).randomElement() ?? nudgeText
     }
 
     public var intensity: Intensity {
@@ -68,6 +92,10 @@ public final class HabitOccurrence {
     /// Created by snoozing. Already has its own notification scheduled, so the
     /// coordinator must not schedule a second one for it.
     public var isFollowUp: Bool = false
+    /// Nudges that wanted the same moment share a group and are answered in
+    /// position order, one after another.
+    public var queueGroup: UUID?
+    public var queuePosition: Int = 0
     public var habit: Habit?
 
     public init(id: UUID = UUID(), scheduledAt: Date, habit: Habit?) {
@@ -78,6 +106,8 @@ public final class HabitOccurrence {
         self.snoozeCount = 0
         self.isPinned = false
         self.isFollowUp = false
+        self.queueGroup = nil
+        self.queuePosition = 0
         self.habit = habit
     }
 
