@@ -15,6 +15,24 @@ function schedule(partial: Partial<Schedule> = {}): Schedule {
   };
 }
 
+/** N plausible buckets at roughly the given completion rate. */
+function buckets(rate: number, count: number, stepDays: number) {
+  const today = new Date();
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (count - 1 - index) * stepDays);
+    const of = 3 * stepDays;
+    return { start: date.toISOString().slice(0, 10), done: Math.round(of * rate), of };
+  });
+}
+
+/** Roughly a year ago, so `fetch_history` has somewhere to reach. */
+function trackedSince(): string {
+  const date = new Date();
+  date.setDate(date.getDate() - 300);
+  return date.toISOString().slice(0, 10);
+}
+
 /** 14 plausible days at roughly the given completion rate. */
 function recentDays(rate: number) {
   const today = new Date();
@@ -43,6 +61,9 @@ export const habits: HabitSnapshot[] = [
     longestStreak: 9,
     notes: "",
     recent: recentDays(0.62),
+    weekly: buckets(0.62, 12, 7),
+    monthly: buckets(0.62, 12, 30),
+    trackedSince: trackedSince(),
   },
   {
     id: GYM,
@@ -60,6 +81,9 @@ export const habits: HabitSnapshot[] = [
     longestStreak: 2,
     notes: "",
     recent: recentDays(0.33),
+    weekly: buckets(0.33, 12, 7),
+    monthly: buckets(0.33, 12, 30),
+    trackedSince: trackedSince(),
   },
   {
     id: WATER,
@@ -78,6 +102,9 @@ export const habits: HabitSnapshot[] = [
     longestStreak: 11,
     notes: "",
     recent: recentDays(0.81),
+    weekly: buckets(0.81, 12, 7),
+    monthly: buckets(0.81, 12, 30),
+    trackedSince: trackedSince(),
   },
 ];
 
@@ -278,6 +305,17 @@ export const cases: Case[] = [
     check: (m, reply) => {
       if (m.length > 0) return `expected no mutation, got ${m.map((x) => x.type).join(",")}`;
       return /gym/i.test(reply) ? null : "did not name the weakest habit";
+    },
+  },
+  {
+    name: "reaches past two weeks for exact days",
+    message: "how did I do on the gym habit back in the first week of last month, day by day?",
+    check: (m, reply) => {
+      if (m.length > 0) return `expected no mutation, got ${m.map((x) => x.type).join(",")}`;
+      // The second pass must produce a real answer, not a refusal.
+      return /don't have|do not have|no access|cannot access/i.test(reply)
+        ? "refused instead of fetching the history"
+        : null;
     },
   },
   {

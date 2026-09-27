@@ -178,6 +178,13 @@ nonisolated struct DayPoint: Codable, Sendable {
     var of: Int
 }
 
+nonisolated struct PeriodPoint: Codable, Sendable {
+    /// Bucket start, `YYYY-MM-DD`.
+    var start: String
+    var done: Int
+    var of: Int
+}
+
 nonisolated struct HabitSnapshot: Codable, Sendable {
     var id: UUID
     var name: String
@@ -189,14 +196,37 @@ nonisolated struct HabitSnapshot: Codable, Sendable {
     var currentStreak: Int
     var longestStreak: Int
     var notes: String
-    /// Last 14 days, oldest first. Lets the assistant answer questions about
-    /// time without a round trip for data it should already have.
+    /// Last 14 days, oldest first.
     var recent: [DayPoint]
+    /// Last 12 weeks and 12 months, so questions that reach past two weeks are
+    /// answerable without a round trip. Day-level detail beyond that comes
+    /// from `fetch_history`.
+    var weekly: [PeriodPoint]
+    var monthly: [PeriodPoint]
+    /// Oldest record, `YYYY-MM-DD`. Tells the model how far back it may ask.
+    var trackedSince: String?
+}
+
+/// The assistant asking for day-level detail it was not given up front.
+nonisolated struct HistoryRequest: Codable, Sendable {
+    var from: String
+    var to: String
+    var habitID: UUID?
+}
+
+/// The answer to one, supplied by the device on the second pass.
+nonisolated struct HistorySlice: Codable, Sendable {
+    var habitID: UUID
+    var habitName: String
+    var days: [DayPoint]
 }
 
 nonisolated struct AssistantReply: Codable, Sendable {
     var reply: String
     var mutations: [Mutation]
+    /// Present when the model needs history it was not handed. The app fills
+    /// it and asks again; see `ChatView.send`.
+    var dataRequest: HistoryRequest?
     /// Tool calls the Worker rejected. Shown to the user, because a model that
     /// half-applied a compound request will still say "Done".
     var warnings: [String]?
@@ -227,6 +257,8 @@ nonisolated enum AssistantService {
         var history: [Turn]
         var timezone: String
         var localTime: String
+        /// Populated only on a second pass, in answer to a `dataRequest`.
+        var extraHistory: [HistorySlice]?
     }
 
     struct Turn: Codable {
@@ -262,6 +294,7 @@ nonisolated enum AssistantService {
         _ message: String,
         habits: [HabitSnapshot],
         history: [Turn],
+        extraHistory: [HistorySlice]? = nil,
         session: URLSession = .shared
     ) async -> Result<AssistantReply, ServiceError> {
         guard let base = baseURL else { return .failure(.notConfigured) }
@@ -271,7 +304,8 @@ nonisolated enum AssistantService {
             habits: habits,
             history: Array(history.suffix(20)),
             timezone: TimeZone.current.identifier,
-            localTime: Self.localTimeDescription()
+            localTime: Self.localTimeDescription(),
+            extraHistory: extraHistory
         )
 
         var request = URLRequest(url: base.appendingPathComponent("chat"))

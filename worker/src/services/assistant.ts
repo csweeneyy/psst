@@ -107,6 +107,30 @@ async function attempt(env: Env, request: ChatRequest, route: Route): Promise<At
     };
   }
 
+  // A history request ends the turn: the device answers it and asks again.
+  const fetch = first.value.toolCalls.find((call) => call.name === "fetch_history");
+  if (fetch) {
+    const from = String(fetch.input.from ?? "");
+    const to = String(fetch.input.to ?? "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return {
+        ok: true,
+        value: {
+          reply: "",
+          mutations: [],
+          warnings: [],
+          dataRequest: {
+            from,
+            to,
+            ...(typeof fetch.input.habitID === "string" ? { habitID: fetch.input.habitID } : {}),
+          },
+          inputTokens,
+          outputTokens,
+        },
+      };
+    }
+  }
+
   const mutations: Mutation[] = [];
   const results: ToolResult[] = [];
   const failures: string[] = [];
@@ -173,6 +197,17 @@ function fallbackReply(mutations: Mutation[]): string {
 }
 
 function systemPrompt(request: ChatRequest): string {
+  const extra = (request.extraHistory ?? []).length
+    ? `\n\nHistory you asked for:\n` +
+      (request.extraHistory ?? [])
+        .map(
+          (slice) =>
+            `- ${slice.habitName}: ${slice.days.map((d) => `${d.day} ${d.done}/${d.of}`).join(", ") || "(nothing recorded)"}`,
+        )
+        .join("\n") +
+      `\nAnswer from this. Do not ask for it again.`
+    : "";
+
   const habits = request.habits.length
     ? request.habits
         .map(
@@ -183,7 +218,10 @@ function systemPrompt(request: ChatRequest): string {
             `  schedule: ${JSON.stringify(h.schedule)}\n` +
             `  last 7 days: ${Math.round(h.completionRate7d * 100)}% completed, ${h.currentStreak} day streak, best ever ${h.longestStreak}` +
             (h.notes ? `\n  notes: "${h.notes}"` : "") +
-            `\n  by day (oldest first): ${(h.recent ?? []).map((d) => `${d.day} ${d.done}/${d.of}`).join(", ")}`,
+            `\n  by day (last 14): ${(h.recent ?? []).map((d) => `${d.day} ${d.done}/${d.of}`).join(", ")}` +
+            `\n  by week (last 12): ${(h.weekly ?? []).map((w) => `${w.start} ${w.done}/${w.of}`).join(", ") || "none"}` +
+            `\n  by month (last 12): ${(h.monthly ?? []).map((m) => `${m.start} ${m.done}/${m.of}`).join(", ") || "none"}` +
+            (h.trackedSince ? `\n  tracked since: ${h.trackedSince}` : ""),
         )
         .join("\n")
     : "(none yet)";
@@ -230,8 +268,11 @@ Rules you must follow:
    reword, recolour, pause, delete, take notes, log a past day, erase history,
    push the next nudge back. If they ask for something you have a tool for,
    use it rather than explaining that you cannot.
-9. The by-day series above is real data. Answer questions about trends, weeks
-   and specific dates from it directly. Never say you lack access to it.
+9. The series above are real data: 14 days, 12 weeks and 12 months per habit.
+   Answer questions about trends and specific periods from them directly, and
+   never say you lack access. For exact days further back than two weeks, call
+   fetch_history; you have history all the way to each habit's "tracked since"
+   date.${extra}
 10. Dates in tools are YYYY-MM-DD in the user's local calendar. Derive
    "yesterday" and "last week" from the local date given above, never from UTC.
 11. clear_range destroys data. The app will ask the user to confirm before it

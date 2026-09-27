@@ -46,11 +46,16 @@ export default {
         history: body.history ?? [],
         timezone: body.timezone ?? "UTC",
         localTime: body.localTime ?? new Date().toISOString(),
+        extraHistory: body.extraHistory,
       },
       override,
     );
 
     if (!result.ok) return json({ error: result.error, attempts: result.attempts }, 502);
+
+    // A history request is an intermediate step, not a turn worth recording:
+    // the device is about to ask the same question again with data attached.
+    if (result.value.dataRequest) return json(result.value);
 
     // Persistence is best effort. A D1 hiccup must not cost the user their
     // reply, which the device has already applied locally.

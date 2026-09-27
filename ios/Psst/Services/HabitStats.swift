@@ -116,6 +116,62 @@ nonisolated enum HabitStatsService {
         }
     }
 
+    /// Coarser buckets for questions that reach past the daily window.
+    /// `label` is the bucket's start date in `YYYY-MM-DD`.
+    static func buckets(
+        for occurrences: [HabitOccurrence],
+        component: Calendar.Component,
+        count: Int,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> [(label: Date, completed: Int, answered: Int)] {
+        guard let currentStart = calendar.dateInterval(of: component, for: now)?.start else { return [] }
+
+        var tallies: [Date: (Int, Int)] = [:]
+        for occurrence in occurrences where occurrence.status != .pending {
+            guard let start = calendar.dateInterval(of: component, for: occurrence.scheduledAt)?.start
+            else { continue }
+            var bucket = tallies[start] ?? (0, 0)
+            bucket.1 += 1
+            if occurrence.status == .completed { bucket.0 += 1 }
+            tallies[start] = bucket
+        }
+
+        return (0..<count).reversed().compactMap { offset in
+            guard let start = calendar.date(byAdding: component, value: -offset, to: currentStart)
+            else { return nil }
+            guard let bucket = tallies[start], bucket.1 > 0 else { return nil }
+            return (start, bucket.0, bucket.1)
+        }
+    }
+
+    /// Every day on record, for a specific range the assistant asked about.
+    static func range(
+        for occurrences: [HabitOccurrence],
+        from: Date,
+        to: Date,
+        calendar: Calendar = .current
+    ) -> [DaySlice] {
+        var buckets: [Date: (completed: Int, answered: Int, scheduled: Int)] = [:]
+        for occurrence in occurrences {
+            let day = calendar.startOfDay(for: occurrence.scheduledAt)
+            guard day >= calendar.startOfDay(for: from), day <= calendar.startOfDay(for: to) else { continue }
+            var bucket = buckets[day] ?? (0, 0, 0)
+            bucket.scheduled += 1
+            if occurrence.status != .pending { bucket.answered += 1 }
+            if occurrence.status == .completed { bucket.completed += 1 }
+            buckets[day] = bucket
+        }
+        return buckets
+            .map { DaySlice(date: $0.key, completed: $0.value.completed, answered: $0.value.answered, scheduled: $0.value.scheduled) }
+            .sorted { $0.date < $1.date }
+    }
+
+    /// The earliest thing on record, so the assistant knows how far back to look.
+    static func firstRecord(for occurrences: [HabitOccurrence]) -> Date? {
+        occurrences.map(\.scheduledAt).min()
+    }
+
     /// The best run this habit has ever had.
     static func longestStreak(
         for occurrences: [HabitOccurrence],

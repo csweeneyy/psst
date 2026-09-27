@@ -49,6 +49,25 @@ export interface HabitSnapshot {
   notes: string;
   /** Last 14 days, oldest first. */
   recent: DayPoint[];
+  /** Coarser buckets reaching back further. `start` is YYYY-MM-DD. */
+  weekly: Array<{ start: string; done: number; of: number }>;
+  monthly: Array<{ start: string; done: number; of: number }>;
+  /** Oldest record, YYYY-MM-DD. */
+  trackedSince?: string;
+}
+
+/** The assistant asking the device for day-level detail it was not given. */
+export interface HistoryRequest {
+  from: string;
+  to: string;
+  habitID?: string;
+}
+
+/** The device's answer, supplied on a second pass. */
+export interface HistorySlice {
+  habitID: string;
+  habitName: string;
+  days: DayPoint[];
 }
 
 export type OccurrenceStatus = "pending" | "completed" | "skipped" | "missed";
@@ -83,11 +102,15 @@ export interface ChatRequest {
   history: Turn[];
   timezone: string;
   localTime: string;
+  /** Only present on a second pass, answering a `dataRequest`. */
+  extraHistory?: HistorySlice[];
 }
 
 export interface ChatResponse {
   reply: string;
   mutations: Mutation[];
+  /** Set when the model needs history the request did not include. */
+  dataRequest?: HistoryRequest;
   /** Tool calls the Worker rejected. Shown to the user, not just logged. */
   warnings?: string[];
 }

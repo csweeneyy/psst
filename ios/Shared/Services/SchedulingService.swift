@@ -135,7 +135,41 @@ nonisolated public enum SchedulingService {
         }
         plan.notifications = allocate(byHabit, limit: pendingNotificationLimit)
 
+        // Two habits landing on the same minute is common: 9 AM is a popular
+        // time. Three banners arriving together is one interruption the user
+        // cannot triage, and three Live Activities at once will exhaust the
+        // undocumented concurrency limit outright.
+        plan.notifications = spread(plan.notifications)
+        plan.liveActivities = spread(plan.liveActivities)
+
         return plan
+    }
+
+    /// Minimum gap between nudges from *different* habits.
+    public static let collisionGapMinutes = 2
+
+    /// Pushes colliding nudges apart, earliest kept in place.
+    ///
+    /// Only across habits: a single habit's own spacing is already governed by
+    /// its `minIntervalMinutes`, and moving those would undo the user's choice.
+    static func spread(_ nudges: [PlannedNudge]) -> [PlannedNudge] {
+        let gap = TimeInterval(collisionGapMinutes * 60)
+        var placed: [PlannedNudge] = []
+        var lastByTime: Date?
+        var lastHabit: UUID?
+
+        for nudge in nudges.sorted(by: { $0.fireAt < $1.fireAt }) {
+            var fireAt = nudge.fireAt
+            if let previous = lastByTime,
+               lastHabit != nudge.habitID,
+               fireAt.timeIntervalSince(previous) < gap {
+                fireAt = previous.addingTimeInterval(gap)
+            }
+            placed.append(PlannedNudge(habitID: nudge.habitID, fireAt: fireAt))
+            lastByTime = fireAt
+            lastHabit = nudge.habitID
+        }
+        return placed
     }
 
     /// Fair-share allocation.

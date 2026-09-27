@@ -46,8 +46,8 @@ nonisolated final class FlowSmokeTests: XCTestCase {
         if firstCheck.exists { firstCheck.tap() }
         shot(app, "02-home-after-complete")
 
-        // Left swipe reveals a red Delete, which then asks for confirmation,
-        // exactly like deleting a note.
+        // A full left swipe goes straight to a centred confirmation, and the
+        // row must stay visible until that confirmation is answered.
         //
         // The drag must stay clear of both screen edges: within roughly 30pt
         // of the left edge the system claims it as an interactive-pop gesture.
@@ -58,24 +58,22 @@ nonisolated final class FlowSmokeTests: XCTestCase {
         let to = cell.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5))
         from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .default, thenHoldForDuration: 0.1)
 
-        let delete = app.buttons["Delete"]
-        _ = delete.waitForExistence(timeout: 4)
-        shot(app, "03-swipe-revealed")
-        XCTAssertTrue(delete.exists, "left swipe revealed no delete action")
-        delete.tap()
-
-        // A full swipe must not delete on its own; confirmation is required.
-        let confirm = app.buttons.matching(identifier: "Delete").element(boundBy: 0)
         XCTAssertTrue(
-            app.staticTexts["Delete this reminder?"].waitForExistence(timeout: 4),
-            "no confirmation step before deleting"
+            app.staticTexts["Delete this reminder?"].waitForExistence(timeout: 5),
+            "full swipe did not reach the confirmation"
         )
-        confirm.tap()
+        XCTAssertTrue(cell.exists, "row was removed before the user confirmed")
+        shot(app, "03-swipe-revealed")
 
-        let gone = expectation(
-            for: NSPredicate(format: "exists == false"), evaluatedWith: delete
+        // Assert the alert resolves, not that the row vanishes: the scheduler
+        // immediately materialises the next Posture check nudge, so a query by
+        // habit name matches a different row a moment later.
+        app.alerts.buttons["Delete"].tap()
+        let resolved = expectation(
+            for: NSPredicate(format: "exists == false"),
+            evaluatedWith: app.staticTexts["Delete this reminder?"]
         )
-        wait(for: [gone], timeout: 8)
+        wait(for: [resolved], timeout: 8)
         shot(app, "03-after-swipe")
 
 

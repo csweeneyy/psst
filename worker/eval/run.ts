@@ -17,11 +17,37 @@ interface Reply {
   reply?: string;
   mutations?: Mutation[];
   warnings?: string[];
+  dataRequest?: { from: string; to: string; habitID?: string };
   servedBy?: string;
   inputTokens?: number;
   outputTokens?: number;
   error?: string;
   attempts?: Array<{ provider: string; model: string; ok: boolean; reason?: string }>;
+}
+
+/** Stands in for the device answering a `fetch_history` call. */
+function fabricate(request: { from: string; to: string; habitID?: string }) {
+  const start = new Date(request.from);
+  const end = new Date(request.to);
+  const days: Array<{ day: string; done: number; of: number }> = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    days.push({ day: d.toISOString().slice(0, 10), done: 1, of: 3 });
+  }
+  return habits
+    .filter((h) => !request.habitID || h.id === request.habitID)
+    .map((h) => ({ habitID: h.id, habitName: h.name, days }));
+}
+
+async function ask(body: Record<string, unknown>): Promise<Reply> {
+  const response = await fetch(`${BASE}/chat`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(MODEL ? { "x-psst-model": MODEL } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  return (await response.json()) as Reply;
 }
 
 const results: Array<{ name: string; pass: boolean; detail: string; ms: number }> = [];
@@ -31,23 +57,21 @@ let servedBy = MODEL || "(chain)";
 
 for (const testCase of cases) {
   const started = Date.now();
+  const request: Record<string, unknown> = {
+    message: testCase.message,
+    habits,
+    history: [],
+    timezone: "America/New_York",
+    localTime: new Date().toISOString(),
+  };
+
   let body: Reply;
   try {
-    const response = await fetch(`${BASE}/chat`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(MODEL ? { "x-psst-model": MODEL } : {}),
-      },
-      body: JSON.stringify({
-        message: testCase.message,
-        habits,
-        history: [],
-        timezone: "America/New_York",
-        localTime: new Date().toISOString(),
-      }),
-    });
-    body = (await response.json()) as Reply;
+    body = await ask(request);
+    // Same single retry the app performs when the model asks for history.
+    if (body.dataRequest) {
+      body = await ask({ ...request, extraHistory: fabricate(body.dataRequest) });
+    }
   } catch (cause) {
     results.push({ name: testCase.name, pass: false, detail: String(cause), ms: Date.now() - started });
     continue;

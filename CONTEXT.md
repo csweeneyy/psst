@@ -127,6 +127,18 @@ ScrollView of hand-drawn cards. That brings row reuse, correct section header
 treatment, and `swipeActions`, which is the only reliable way to get a swipe
 gesture past a scroll view.
 
+## What the assistant can see
+
+Every request carries, per habit: the last 14 days daily, the last 12 weeks,
+the last 12 months, and the date of its oldest record. For exact days further
+back, the model calls `fetch_history`; the Worker ends its turn with a
+`dataRequest`, the device resolves it against SwiftData, and asks once more
+with the data attached. Exactly one retry, so a model that keeps asking cannot
+loop, and the intermediate pass is never recorded as a conversation turn.
+
+Destructive tool calls (`deleteHabit`, `clearRange`) never apply directly. The
+app shows a confirmation with a concrete count first.
+
 ## Adaptation
 
 `ScheduleAdvisor` is the piece that makes the app adaptive rather than merely
@@ -191,6 +203,13 @@ weekly review, and apply in one tap.
   boundary and resolve the context on the far side.
 - `Section("Title") { … } footer: { … }` does not compile. Use the explicit
   `header:`/`footer:` closure form.
+- `Button(role: .destructive)` inside `swipeActions` animates the row out as
+  soon as the swipe completes. If the delete is gated behind a confirmation,
+  use a plain button with `.tint(.red)` or the row flickers away and back.
+- Nudges from different habits are spread at least
+  `SchedulingService.collisionGapMinutes` apart. A single habit's own cadence
+  is never touched: that is its `minIntervalMinutes`, set deliberately.
+  AlarmKit is the known gap; it schedules from each habit, not from the plan.
 - `resync` must purge as well as add. `SchedulingService.stale` decides what
   the new plan orphaned; skipping it leaves the old schedule's rows on Home and
   makes every habit edit look like a no-op. Regression: `ReconciliationTests`.

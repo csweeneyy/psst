@@ -57,6 +57,8 @@ final class NudgeCoordinator {
         plan.notifications.sort { $0.fireAt < $1.fireAt }
         plan.liveActivities.sort { $0.fireAt < $1.fireAt }
 
+        await LiveActivityService.dropOrphans(livingHabitIDs: Set(byID.keys))
+
         let occurrenceIDs = materialize(plan, habits: byID, context: context, now: now, pinned: pinned)
 
         var notificationNudges = plan.notifications

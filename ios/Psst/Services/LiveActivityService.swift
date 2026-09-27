@@ -111,4 +111,15 @@ nonisolated enum LiveActivityService {
     static func dismiss(occurrenceID: UUID) async {
         await NudgeActivity.resolve(occurrenceID: occurrenceID)
     }
+
+    /// Clears anything belonging to habits that no longer exist. Without this a
+    /// deleted habit keeps its scheduled card and fires for something the user
+    /// cannot even see any more.
+    static func dropOrphans(livingHabitIDs: Set<UUID>) async {
+        for activity in NudgeActivity.all()
+        where !livingHabitIDs.contains(activity.attributes.habitID) {
+            psstLog.notice("ending orphaned activity \(activity.id, privacy: .public)")
+            await activity.end(nil, dismissalPolicy: .immediate)
+        }
+    }
 }

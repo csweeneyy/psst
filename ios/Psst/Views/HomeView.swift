@@ -80,8 +80,18 @@ struct HomeView: View {
             }
             .listStyle(.insetGrouped)
             .scrollDismissesKeyboard(.immediately)
-            .navigationTitle(greeting)
+            .navigationTitle("Today")
+            .navigationSubtitle(Text(clock.formatted(.dateTime.weekday(.wide).month(.wide).day())))
             .toolbarTitleDisplayMode(.large)
+            .toolbar {
+                // An empty navigation bar row above a large title reads as
+                // dead space. The counter earns it and is useful at a glance.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Text(progressLabel)
+                        .font(Theme.caption(13).monospacedDigit())
+                        .foregroundStyle(Theme.Palette.inkSoft)
+                }
+            }
         }
         .sheet(item: $rescheduling) { occurrence in
             RescheduleSheet(occurrence: occurrence) { move(occurrence, to: $0) }
@@ -134,26 +144,29 @@ struct HomeView: View {
             .accessibilityIdentifier("row.\(occurrence.id.uuidString)")
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if dismissable {
-                    // Full swipe goes straight to the confirmation, so the
-                    // gesture alone is enough. Same as deleting a note.
-                    Button(role: .destructive) { pendingDelete = occurrence } label: {
+                    // Not `role: .destructive`. That role makes SwiftUI animate
+                    // the row out the instant the swipe completes, so the row
+                    // vanished and then sprang back when the confirmation
+                    // appeared. A plain red button leaves the row in place
+                    // until the user actually confirms.
+                    Button { pendingDelete = occurrence } label: {
                         Label("Delete", systemImage: "trash")
                     }
-                    // The app-wide near-black tint otherwise wins over the
-                    // destructive role and paints this black.
                     .tint(Theme.Palette.alarm)
                 }
             }
         }
     }
 
-    private var greeting: String {
-        switch Calendar.current.component(.hour, from: clock) {
-        case 0..<5: "Late"
-        case 5..<12: "Morning"
-        case 12..<18: "Afternoon"
-        default: "Evening"
+    /// Today's tally, shown in the navigation bar.
+    private var progressLabel: String {
+        let today = occurrences.filter {
+            $0.habit != nil && Calendar.current.isDateInToday($0.scheduledAt)
         }
+        let answered = today.filter { $0.status != .pending }
+        let done = answered.filter { $0.status == .completed }.count
+        guard !today.isEmpty else { return "" }
+        return "\(done)/\(today.count)"
     }
 
     /// Names the next nudge and which habit owns it. Without this, a habit

@@ -269,36 +269,87 @@ struct ChatView: View {
                 notes: habit.notes,
                 recent: HabitStatsService.daily(for: habit.occurrences, days: 14).map {
                     DayPoint(day: DayKey.string($0.date), done: $0.completed, of: $0.scheduled)
-                }
+                },
+                weekly: HabitStatsService
+                    .buckets(for: habit.occurrences, component: .weekOfYear, count: 12)
+                    .map { PeriodPoint(start: DayKey.string($0.label), done: $0.completed, of: $0.answered) },
+                monthly: HabitStatsService
+                    .buckets(for: habit.occurrences, component: .month, count: 12)
+                    .map { PeriodPoint(start: DayKey.string($0.label), done: $0.completed, of: $0.answered) },
+                trackedSince: HabitStatsService.firstRecord(for: habit.occurrences)
+                    .map { DayKey.string($0) }
             )
         }
 
+        var reply: AssistantReply
         switch await AssistantService.send(text, habits: snapshots, history: history) {
-        case .success(let reply):
-            if reply.mutations.contains(where: \.isDestructive) {
-                awaitingConfirmation = PendingChange(
-                    reply: reply.reply,
-                    mutations: reply.mutations,
-                    summary: MutationApplier.describe(reply.mutations, habits: habits)
-                )
-                return
-            }
-            let summary = MutationApplier.apply(reply.mutations, habits: habits, context: context)
-            context.insert(ChatMessage(role: "assistant", text: reply.reply, appliedSummary: summary))
-            try? context.save()
-            let warning = (reply.warnings ?? []).isEmpty
-                ? nil
-                : "Could not apply: " + (reply.warnings ?? []).joined(separator: "; ")
-            withAnimation(Theme.fast) {
-                turns.append(Bubble(
-                    isUser: false, text: reply.reply, applied: summary, warning: warning
-                ))
-            }
-            if !reply.mutations.isEmpty {
-                await coordinator.resync(context: context)
-            }
         case .failure(let error):
             failure = error.errorDescription
+            return
+        case .success(let first):
+            reply = first
+        }
+
+        // The model asked for history it was not handed. Resolve it locally and
+        // ask once more. Once only, so a model that keeps asking cannot loop.
+        if let request = reply.dataRequest {
+            let slices = historySlices(for: request)
+            switch await AssistantService.send(
+                text, habits: snapshots, history: history, extraHistory: slices
+            ) {
+            case .failure(let error):
+                failure = error.errorDescription
+                return
+            case .success(let second):
+                reply = second
+            }
+        }
+
+        await applyReply(reply)
+    }
+
+    /// Day-level detail for whatever range the assistant asked about.
+    private func historySlices(for request: HistoryRequest) -> [HistorySlice] {
+        guard let from = DayKey.date(request.from), let to = DayKey.date(request.to) else { return [] }
+        return habits
+            .filter { request.habitID == nil || $0.id == request.habitID }
+            .map { habit in
+                HistorySlice(
+                    habitID: habit.id,
+                    habitName: habit.name,
+                    days: HabitStatsService.range(for: habit.occurrences, from: from, to: to).map {
+                        DayPoint(day: DayKey.string($0.date), done: $0.completed, of: $0.scheduled)
+                    }
+                )
+            }
+    }
+
+    private func applyReply(_ reply: AssistantReply) async {
+        // Anything irreversible waits for an explicit confirmation.
+        if reply.mutations.contains(where: \.isDestructive) {
+            awaitingConfirmation = PendingChange(
+                reply: reply.reply,
+                mutations: reply.mutations,
+                summary: MutationApplier.describe(reply.mutations, habits: habits)
+            )
+            return
+        }
+
+        let summary = MutationApplier.apply(reply.mutations, habits: habits, context: context)
+        context.insert(ChatMessage(role: "assistant", text: reply.reply, appliedSummary: summary))
+        try? context.save()
+
+        let warning = (reply.warnings ?? []).isEmpty
+            ? nil
+            : "Could not apply: " + (reply.warnings ?? []).joined(separator: "; ")
+        withAnimation(Theme.fast) {
+            turns.append(Bubble(
+                isUser: false, text: reply.reply, applied: summary, warning: warning
+            ))
+        }
+
+        if !reply.mutations.isEmpty {
+            await coordinator.resync(context: context)
         }
     }
 

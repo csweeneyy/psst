@@ -175,6 +175,39 @@ struct SchedulingServiceTests {
         }
     }
 
+    @Test("Nudges from different habits are pushed apart")
+    func collidingHabitsAreSpread() {
+        let a = UUID()
+        let b = UUID()
+        let c = UUID()
+        let moment = at(2026, 3, 2, 9)
+        let spread = SchedulingService.spread([
+            PlannedNudge(habitID: a, fireAt: moment),
+            PlannedNudge(habitID: b, fireAt: moment),
+            PlannedNudge(habitID: c, fireAt: moment),
+        ])
+        #expect(spread.count == 3)
+        for (earlier, later) in zip(spread, spread.dropFirst()) {
+            #expect(
+                later.fireAt.timeIntervalSince(earlier.fireAt)
+                    >= TimeInterval(SchedulingService.collisionGapMinutes * 60)
+            )
+        }
+        // The soonest one keeps the time the user actually chose.
+        #expect(spread.first?.fireAt == moment)
+    }
+
+    @Test("A habit's own tight cadence is left alone")
+    func oneHabitIsNotSpread() {
+        // Spacing within a habit is the user's `minIntervalMinutes` decision.
+        let habit = UUID()
+        let base = at(2026, 3, 2, 9)
+        let input = (0..<4).map {
+            PlannedNudge(habitID: habit, fireAt: base.addingTimeInterval(Double($0) * 60))
+        }
+        #expect(SchedulingService.spread(input) == input)
+    }
+
     @Test("Paused habits generate nothing at all")
     func pausedHabitsAreSilent() {
         let habits = [

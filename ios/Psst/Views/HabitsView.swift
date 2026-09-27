@@ -33,7 +33,10 @@ struct HabitsView: View {
                                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                                 .listRowBackground(Theme.Palette.surface)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) { pendingDelete = habit } label: {
+                                    // Plain button, not `role: .destructive`:
+                                    // the role animates the row out before the
+                                    // confirmation has been answered.
+                                    Button { pendingDelete = habit } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
                                     .tint(Theme.Palette.alarm)

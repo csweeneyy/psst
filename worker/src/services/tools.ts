@@ -194,6 +194,20 @@ export const tools = [
     },
   },
   {
+    name: "fetch_history",
+    description:
+      "Ask the device for day-by-day detail over a date range you were not given. The habit snapshots already include the last 14 days, the last 12 weeks and the last 12 months, so only call this when the question needs exact days further back than two weeks. Calling it ends your turn: you will be asked again with the data attached.",
+    parameters: {
+      type: "object",
+      required: ["from", "to"],
+      properties: {
+        habitID: { type: "string", description: "Omit for every habit." },
+        from: { type: "string", description: "YYYY-MM-DD, inclusive." },
+        to: { type: "string", description: "YYYY-MM-DD, inclusive." },
+      },
+    },
+  },
+  {
     name: "snooze_next",
     description: "Push the next upcoming nudge for a habit back by some minutes.",
     parameters: {
