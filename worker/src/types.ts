@@ -21,6 +21,8 @@ export interface Schedule {
 }
 
 export interface HabitDraft {
+  /** Shield every other app while this habit is due. Requires `alarm`. */
+  lockdown?: boolean;
   name: string;
   nudgeText: string;
   intensity: Intensity;
@@ -76,6 +78,7 @@ export type Mutation =
   | { type: "createHabit"; habit: HabitDraft }
   | { type: "updateSchedule"; habitID: string; schedule: Schedule }
   | { type: "setIntensity"; habitID: string; intensity: Intensity }
+  | { type: "setLockdown"; habitID: string; lockdown: boolean }
   | { type: "pauseHabit"; habitID: string; paused: boolean }
   | { type: "deleteHabit"; habitID: string }
   | {

@@ -6,6 +6,8 @@ nonisolated enum Mutation: Codable, Sendable {
     case createHabit(HabitDraft)
     case updateSchedule(habitID: UUID, schedule: Schedule)
     case setIntensity(habitID: UUID, intensity: Intensity)
+    /// Shield every other app while this habit is due. Alarm tier only.
+    case setLockdown(habitID: UUID, lockdown: Bool)
     case pauseHabit(habitID: UUID, paused: Bool)
     case deleteHabit(habitID: UUID)
     /// Rename, reword the nudge, change its icon or colour. Every field optional.
@@ -30,7 +32,7 @@ nonisolated enum Mutation: Codable, Sendable {
     /// Flat discriminated union, matching the tool result shapes the Worker
     /// produces. See `worker/src/services/assistant.ts`.
     private enum CodingKeys: String, CodingKey {
-        case type, habit, habitID, schedule, intensity, paused
+        case type, habit, habitID, schedule, intensity, paused, lockdown
         case name, nudgeText, nudgeVariants, symbol, tintHex, notes, day, status, from, to, minutes
     }
 
@@ -48,6 +50,11 @@ nonisolated enum Mutation: Codable, Sendable {
             self = .setIntensity(
                 habitID: try c.decode(UUID.self, forKey: .habitID),
                 intensity: try c.decode(Intensity.self, forKey: .intensity)
+            )
+        case "setLockdown":
+            self = .setLockdown(
+                habitID: try c.decode(UUID.self, forKey: .habitID),
+                lockdown: try c.decode(Bool.self, forKey: .lockdown)
             )
         case "pauseHabit":
             self = .pauseHabit(
@@ -108,6 +115,10 @@ nonisolated enum Mutation: Codable, Sendable {
             try c.encode("setIntensity", forKey: .type)
             try c.encode(id, forKey: .habitID)
             try c.encode(intensity, forKey: .intensity)
+        case .setLockdown(let id, let on):
+            try c.encode("setLockdown", forKey: .type)
+            try c.encode(id, forKey: .habitID)
+            try c.encode(on, forKey: .lockdown)
         case .pauseHabit(let id, let paused):
             try c.encode("pauseHabit", forKey: .type)
             try c.encode(id, forKey: .habitID)
@@ -168,6 +179,8 @@ nonisolated struct HabitDraft: Codable, Sendable {
     var schedule: Schedule
     var symbol: String
     var tintHex: String
+    /// Optional so older Worker responses still decode.
+    var lockdown: Bool?
 }
 
 /// The snapshot the assistant reasons over. Sent with every message, because

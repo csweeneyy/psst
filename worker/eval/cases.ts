@@ -170,6 +170,20 @@ export const cases: Case[] = [
     },
   },
   {
+    // The exact sentence that came back as an ordinary standard habit.
+    name: "create / screen locked",
+    message: "make a test screen locked habit for 12:15",
+    check: (m) => {
+      const found = one(m, "createHabit");
+      if (typeof found === "string") return found;
+      if (found.type !== "createHabit") return "wrong type";
+      if (found.habit.lockdown !== true) return `expected lockdown, got ${found.habit.lockdown}`;
+      return found.habit.intensity === "alarm"
+        ? null
+        : `lockdown needs the alarm tier, got ${found.habit.intensity}`;
+    },
+  },
+  {
     name: "update schedule / loosen",
     message: "posture one is too often, make it every 3 hours",
     check: (m) => {

@@ -603,15 +603,20 @@ enum MutationApplier {
         for mutation in mutations {
             switch mutation {
             case .createHabit(let draft):
-                context.insert(Habit(
+                let locks = draft.lockdown == true
+                let created = Habit(
                     name: draft.name,
                     nudgeText: draft.nudgeText,
-                    intensity: draft.intensity,
+                    // Lockdown only works on the alarm tier, so asking for one
+                    // is asking for the other whatever the model filled in.
+                    intensity: locks ? .alarm : draft.intensity,
                     schedule: draft.schedule,
                     symbol: draft.symbol,
                     tintHex: draft.tintHex
-                ))
-                lines.append("Added \(draft.name)")
+                )
+                created.lockdownEnabled = locks
+                context.insert(created)
+                lines.append(locks ? "Added \(draft.name), locks your phone" : "Added \(draft.name)")
 
             case .updateSchedule(let id, let schedule):
                 guard let habit = byID[id] else { continue }
@@ -625,7 +630,25 @@ enum MutationApplier {
             case .setIntensity(let id, let intensity):
                 guard let habit = byID[id] else { continue }
                 habit.intensity = intensity
-                lines.append("\(habit.name) is now \(intensity.title)")
+                if intensity != .alarm && habit.lockdownEnabled {
+                    // Lockdown only exists on the alarm tier. Dropping the
+                    // tier has to drop the shield with it, or the habit would
+                    // claim a lockdown the scheduler will never arm.
+                    habit.lockdownEnabled = false
+                    lines.append("\(habit.name) is now \(intensity.title), lockdown off")
+                } else {
+                    lines.append("\(habit.name) is now \(intensity.title)")
+                }
+
+            case .setLockdown(let id, let on):
+                guard let habit = byID[id] else { continue }
+                habit.lockdownEnabled = on
+                if on { habit.intensity = .alarm }
+                lines.append(
+                    on
+                        ? "\(habit.name) locks your phone until it is done"
+                        : "\(habit.name) no longer locks your phone"
+                )
 
             case .pauseHabit(let id, let paused):
                 guard let habit = byID[id] else { continue }

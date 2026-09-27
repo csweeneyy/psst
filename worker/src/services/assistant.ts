@@ -34,6 +34,15 @@ const FAILOVER_MS = 12_000;
  */
 const TURN_MS = 38_000;
 
+/**
+ * Model calls allowed in one turn. A turn is a loop, not a fixed round trip:
+ * some models batch every tool call into one message, others emit one, read
+ * the result, then emit the next. Stopping after the first batch silently
+ * drops half of "make it an alarm and move it to 6" on the models that
+ * sequence. Four covers three rounds of tool calls plus the closing sentence.
+ */
+const MAX_PASSES = 4;
+
 interface Budget {
   /** Wall clock the whole turn must be done by. */
   deadline: number;
@@ -124,122 +133,108 @@ async function attempt(
     { role: "user", text: request.message },
   ];
 
-  const first = await route.provider.complete({
-    apiKey: route.apiKey,
-    model: route.model,
-    system,
-    messages,
-    tools,
-    maxTokens: 1500,
-    timeoutMs: leash(budget),
-  });
-  if (!first.ok) return first;
+  const mutations: Mutation[] = [];
+  const failures: string[] = [];
+  let inputTokens = 0;
+  let outputTokens = 0;
 
-  let inputTokens = first.value.inputTokens;
-  let outputTokens = first.value.outputTokens;
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    const reply = await route.provider.complete({
+      apiKey: route.apiKey,
+      model: route.model,
+      system,
+      messages,
+      tools,
+      maxTokens: 1500,
+      timeoutMs: leash(budget),
+    });
 
-  if (first.value.toolCalls.length === 0) {
-    if (!first.value.text) {
-      // Neither words nor an action. Nothing to show the user.
-      return { ok: false, error: "model returned an empty response", retryable: true };
+    if (!reply.ok) {
+      // Changes converted on an earlier pass are already decided and valid.
+      // Making another model redo them costs the rest of the turn.
+      if (mutations.length === 0) return reply;
+      break;
     }
-    return {
-      ok: true,
-      value: {
-        reply: first.value.text,
-        mutations: [],
-        warnings: [],
-        inputTokens,
-        outputTokens,
-      },
-    };
-  }
 
-  // A history request ends the turn: the device answers it and asks again.
-  const fetch = first.value.toolCalls.find((call) => call.name === "fetch_history");
-  if (fetch) {
-    const from = String(fetch.input.from ?? "");
-    const to = String(fetch.input.to ?? "");
-    if (/^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
-      return {
-        ok: true,
-        value: {
-          reply: "",
-          mutations: [],
-          warnings: [],
-          dataRequest: {
-            from,
-            to,
-            ...(typeof fetch.input.habitID === "string" ? { habitID: fetch.input.habitID } : {}),
+    inputTokens += reply.value.inputTokens;
+    outputTokens += reply.value.outputTokens;
+
+    if (reply.value.toolCalls.length === 0) {
+      if (reply.value.text) {
+        return {
+          ok: true,
+          value: {
+            reply: reply.value.text,
+            mutations,
+            warnings: failures,
+            inputTokens,
+            outputTokens,
           },
-          inputTokens,
-          outputTokens,
-        },
+        };
+      }
+      // Neither words nor an action. Nothing to show the user.
+      if (mutations.length === 0) {
+        return { ok: false, error: "model returned an empty response", retryable: true };
+      }
+      break;
+    }
+
+    // A history request ends the turn: the device answers it and asks again.
+    // Only worth honouring before anything has changed, because the reply that
+    // carries a dataRequest carries no mutations with it.
+    const history = reply.value.toolCalls.find((call) => call.name === "fetch_history");
+    if (history && mutations.length === 0) {
+      const from = String(history.input.from ?? "");
+      const to = String(history.input.to ?? "");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+        return {
+          ok: true,
+          value: {
+            reply: "",
+            mutations: [],
+            warnings: [],
+            dataRequest: {
+              from,
+              to,
+              ...(typeof history.input.habitID === "string" ? { habitID: history.input.habitID } : {}),
+            },
+            inputTokens,
+            outputTokens,
+          },
+        };
+      }
+    }
+
+    const results: ToolResult[] = [];
+    for (const call of reply.value.toolCalls) {
+      const converted = toMutation(call.name, call.input);
+      if (converted.ok) {
+        mutations.push(converted.mutation);
+        results.push({ id: call.id, content: "Applied." });
+      } else {
+        failures.push(`${call.name}: ${converted.error}`);
+        results.push({ id: call.id, content: converted.error, isError: true });
+      }
+    }
+
+    // Not one call has ever converted. The model does not understand the
+    // schema, so asking it again is pointless; hand the turn to the next model.
+    if (mutations.length === 0) {
+      return {
+        ok: false,
+        error: `all tool calls were invalid (${failures.join("; ")})`,
+        retryable: true,
       };
     }
+
+    messages.push({ role: "assistant", text: reply.value.text, toolCalls: reply.value.toolCalls });
+    messages.push({ role: "toolResults", results });
   }
-
-  const mutations: Mutation[] = [];
-  const results: ToolResult[] = [];
-  const failures: string[] = [];
-
-  for (const call of first.value.toolCalls) {
-    const converted = toMutation(call.name, call.input);
-    if (converted.ok) {
-      mutations.push(converted.mutation);
-      results.push({ id: call.id, content: "Applied." });
-    } else {
-      failures.push(`${call.name}: ${converted.error}`);
-      results.push({ id: call.id, content: converted.error, isError: true });
-    }
-  }
-
-  // Every tool call was malformed. The model does not understand the schema,
-  // so retrying it is pointless; hand the turn to the next model.
-  if (mutations.length === 0) {
-    return {
-      ok: false,
-      error: `all tool calls were invalid (${failures.join("; ")})`,
-      retryable: true,
-    };
-  }
-
-  messages.push({ role: "assistant", text: first.value.text, toolCalls: first.value.toolCalls });
-  messages.push({ role: "toolResults", results });
-
-  const second = await route.provider.complete({
-    apiKey: route.apiKey,
-    model: route.model,
-    system,
-    messages,
-    tools,
-    maxTokens: 1500,
-    timeoutMs: leash(budget),
-  });
-
-  // The change is already decided and validated; this pass only writes the
-  // sentence about it. Losing that sentence is not worth spending the rest of
-  // the turn making another model redo work that is already done.
-  if (!second.ok) {
-    return {
-      ok: true,
-      value: {
-        reply: fallbackReply(mutations),
-        mutations,
-        warnings: failures,
-        inputTokens,
-        outputTokens,
-      },
-    };
-  }
-
-  inputTokens += second.value.inputTokens;
-  outputTokens += second.value.outputTokens;
 
   return {
     ok: true,
     value: {
-      reply: second.value.text || fallbackReply(mutations),
+      reply: fallbackReply(mutations),
       mutations,
       // Surfaced verbatim. A compound request where half the tool calls fail
       // otherwise comes back as a confident "Done", which is how "make it an
@@ -305,6 +300,17 @@ How the three intensity tiers actually behave on the device:
 - alarm: AlarmKit. Overrides silent mode and every Focus mode. Reserve it for
   things that genuinely cannot be missed. Using it for a posture nudge during a
   meeting is hostile, and you should say so rather than comply silently.
+
+On top of the alarm tier there is lockdown, which shields every other app on
+the phone while the habit is due and lifts the moment it is marked done. Turn
+it on whenever the user asks for anything in this family, even in passing, and
+whatever words they use:
+  "screen locked", "lock me out", "lock my phone", "block my apps",
+  "I should not be able to use my phone", "force me", "do not let me skip it".
+It is not a separate kind of habit, it is a flag on one. Set lockdown true
+on create_habit, or call set_lockdown on an existing habit. Lockdown requires
+the alarm tier, so set intensity to alarm in the same call rather than asking
+the user to pick. Say plainly that you did both.
 
 Times are minutes from local midnight: 9 AM is 540, noon is 720, 6 PM is 1080.
 Weekdays are 1 for Sunday through 7 for Saturday.

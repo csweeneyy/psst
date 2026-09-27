@@ -72,7 +72,12 @@ export const tools = [
         intensity: {
           enum: ["gentle", "standard", "alarm"],
           description:
-            "gentle = quiet banner, respects Focus. standard = Lock Screen buttons. alarm = overrides silent mode and Focus, only for things that genuinely cannot be missed.",
+            "gentle = quiet banner, respects Focus. standard = Lock Screen buttons. alarm = overrides silent mode and Focus, only for things that genuinely cannot be missed. Use alarm whenever the user asks to be locked out, since lockdown requires it.",
+        },
+        lockdown: {
+          type: "boolean",
+          description:
+            "Shield every other app on the phone while this habit is due, until it is marked done. Set true when the user asks to be locked out, screen locked, blocked from their phone, forced to do it, or unable to use other apps until it is done. Requires intensity 'alarm', so set intensity to 'alarm' whenever this is true.",
         },
         schedule: scheduleSchema,
         symbol: {
@@ -84,6 +89,19 @@ export const tools = [
           description:
             "One of the iOS system colours: #007AFF blue, #34C759 green, #5856D6 indigo, #FF9500 orange, #FF2D55 pink, #30B0C7 teal.",
         },
+      },
+    },
+  },
+  {
+    name: "set_lockdown",
+    description:
+      "Turn the phone lockdown on or off for an existing habit. Enabling it also moves the habit to the alarm tier, which it requires.",
+    parameters: {
+      type: "object",
+      required: ["habitID", "lockdown"],
+      properties: {
+        habitID: { type: "string" },
+        lockdown: { type: "boolean" },
       },
     },
   },
@@ -253,7 +271,8 @@ export function toMutation(
           habit: {
             name: String(input.name ?? "Habit"),
             nudgeText: String(input.nudgeText ?? "Psst..."),
-            intensity: (input.intensity as never) ?? "standard",
+            intensity: (input.lockdown ? "alarm" : (input.intensity as never)) ?? "standard",
+            lockdown: input.lockdown === true,
             schedule: schedule.value,
             symbol: String(input.symbol ?? "circle.dashed"),
             tintHex: String(input.tintHex ?? "#E8846B"),
@@ -270,6 +289,17 @@ export function toMutation(
         mutation: { type: "updateSchedule", habitID: input.habitID, schedule: schedule.value },
       };
     }
+    case "set_lockdown":
+      if (typeof input.habitID !== "string") return { ok: false, error: "habitID is required" };
+      return {
+        ok: true,
+        mutation: {
+          type: "setLockdown",
+          habitID: input.habitID,
+          lockdown: input.lockdown === true,
+        },
+      };
+
     case "set_intensity":
       if (typeof input.habitID !== "string") return { ok: false, error: "habitID is required" };
       return {

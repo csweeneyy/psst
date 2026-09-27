@@ -103,9 +103,6 @@ struct HomeView: View {
                 // thing up there, and tapping it is how you tell the app your
                 // name, so it is not a dead affordance.
                 ToolbarItem(placement: .topBarLeading) {
-                    // Not a `Button`: a toolbar button on iOS 26 gets a glass
-                    // circle behind it, and a bird in a bubble looks like a
-                    // badge rather than a character.
                     MascotView(
                         mood: MascotMood.current(habits: habits, occurrences: occurrences, now: clock),
                         size: 30
@@ -114,6 +111,11 @@ struct HomeView: View {
                     .onTapGesture { renaming = true }
                     .accessibilityLabel("Your name")
                 }
+                // iOS 26 puts every toolbar item on a shared glass capsule.
+                // Dropping the `Button` was not enough: the background belongs
+                // to the toolbar, not the control, and a bird in a bubble
+                // reads as a badge rather than a character.
+                .sharedBackgroundVisibility(.hidden)
             }
         }
         .alert("What should I call you?", isPresented: $renaming) {
@@ -180,6 +182,7 @@ struct HomeView: View {
         let floor = Level.floor(for: earned)
         let ceiling = Level.ceiling(for: earned)
         let progress = Level.progress(for: earned)
+        let bestStreak = habits.map { HabitStatsService.streak(for: $0.occurrences) }.max() ?? 0
 
         return VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -187,11 +190,23 @@ struct HomeView: View {
                     .font(Theme.title(17))
                     .foregroundStyle(Theme.Palette.ink)
                 Spacer()
+                if bestStreak > 0 {
+                    // The bar already says how far through the level you are.
+                    // What it cannot say is why you are moving, so the streak
+                    // goes here: it is the thing the multiplier is reading.
+                    Label {
+                        Text("\(bestStreak)")
+                            .font(Theme.caption(13).monospacedDigit())
+                    } icon: {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundStyle(Theme.Palette.inkSoft)
+                    .labelStyle(.titleAndIcon)
+                }
+
                 Text("\(earned - floor) / \(ceiling - floor)")
                     .font(Theme.caption(13).monospacedDigit())
-                    .foregroundStyle(Theme.Palette.inkSoft)
-                Text("to \(level + 1)")
-                    .font(Theme.caption(13))
                     .foregroundStyle(Theme.Palette.inkFaint)
             }
 
@@ -207,7 +222,7 @@ struct HomeView: View {
         }
         .animation(Theme.motion, value: earned)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Level \(level), \(earned - floor) of \(ceiling - floor) points to level \(level + 1)")
+        .accessibilityLabel("Level \(level), \(earned - floor) of \(ceiling - floor) points, \(bestStreak) day streak")
     }
 
     @ViewBuilder
