@@ -12,6 +12,4 @@ is how you ship a broken feature; measuring takes twenty minutes.
   stronger model behind it as the escalation target
 
 **Status**
-Harness written (`worker/eval/cases.ts`, `worker/eval/run.ts`). Blocked on an
-API key. Candidate list: GLM 5.3 Flash, DeepSeek V4.1 Flash, GPT OSS 120B,
-Nemotron 3.5 Lightning 30B, with Claude Sonnet 4.5 as the control.
+Settled. Chain is deepseek-v4-flash-0731 then v4.1-flash then v4-pro, chosen by measurement. 20/20 at $0.021/$0.320 per 1M.

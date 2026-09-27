@@ -12,4 +12,4 @@ Buttons visible on the Lock Screen with no long press. This is the tier most hab
 8 hour active limit. Concurrency limit is undocumented, so wrap `Activity.request` in do/catch and degrade to the Gentle tier on failure.
 
 **Status**
-Code is written and compiles. Cannot be verified in the simulator: scheduled Live Activities need a real device. Verify by installing on the iPhone 17 and creating a Standard-tier habit due in a few minutes.
+Verified on device: the Lock Screen card fires, Done and Later both work, and a queued card follows the one before it.

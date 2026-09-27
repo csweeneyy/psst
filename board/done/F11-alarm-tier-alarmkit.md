@@ -12,4 +12,4 @@ For habits that genuinely must not be missed. Overrides Focus and silent mode.
 iOS 26.0+. No Apple entitlement required. App Review posture for a habit app is unconfirmed; irrelevant while this is a personal build.
 
 **Status**
-Code is written and compiles. AlarmKit needs a real device and the alarm permission prompt. Verify by creating an Alarm-tier habit and confirming it fires through silent mode.
+Verified on device: the alarm fires through silence, and stopping it now records a completion (see F51).
