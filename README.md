@@ -49,6 +49,8 @@ Constraints that shape everything:
 - Habit detail with streaks, a 14 day strip, and a time-of-day chart
 - Month calendar, weekly review, Home Screen widget, and an Action button control
 - Snooze that actually brings the nudge back, capped at three
+- Points per habit per day, streak multipliers, and levels
+- A bird that stands differently depending on how you are doing
 
 ## Running it
 

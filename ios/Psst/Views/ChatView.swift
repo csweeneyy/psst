@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 /// The assistant.
 ///
@@ -138,6 +139,7 @@ struct ChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Theme.Space.m) {
+                    if turns.isEmpty { opener }
                     ForEach(turns) { turn in
                         MessageBubble(bubble: turn).id(turn.id)
                     }
@@ -153,6 +155,50 @@ struct ChatView: View {
                 withAnimation(Theme.fast) { proxy.scrollTo(turns.last?.id, anchor: .bottom) }
             }
         }
+    }
+
+    /// What you see before you have said anything.
+    ///
+    /// Removed the prefilled example pills because they were not helpful, and
+    /// left a blank screen behind. This says what the assistant can actually
+    /// see, which is both reassuring and the answer to "what can I ask it".
+    private var opener: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            MascotView(mood: .calm, size: 52)
+
+            Text("Ask me anything about your habits.")
+                .font(Theme.title(20))
+                .foregroundStyle(Theme.Palette.ink)
+
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(contextLines, id: \.self) { line in
+                    Label(line, systemImage: "checkmark")
+                        .font(Theme.footnote(14))
+                        .foregroundStyle(Theme.Palette.inkSoft)
+                }
+            }
+
+            Text("I can change schedules, log a past day, clear history, and answer questions about any date you have data for.")
+                .font(Theme.footnote(14))
+                .foregroundStyle(Theme.Palette.inkFaint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, Theme.Space.l)
+        .padding(.bottom, Theme.Space.s)
+    }
+
+    private var contextLines: [String] {
+        let occurrences = habits.flatMap(\.occurrences)
+        let earliest = occurrences.map(\.scheduledAt).min()
+        var lines = ["\(habits.count) habit\(habits.count == 1 ? "" : "s")"]
+        if !occurrences.isEmpty {
+            lines.append("\(occurrences.count) logged nudges")
+        }
+        if let earliest {
+            let days = Calendar.current.dateComponents([.day], from: earliest, to: .now).day ?? 0
+            if days > 0 { lines.append("history back to \(earliest.formatted(.dateTime.month(.abbreviated).day()))") }
+        }
+        return lines
     }
 
     private var composer: some View {
@@ -248,6 +294,7 @@ struct ChatView: View {
         // the current message, and it replied "since you sent it twice".
         let history = storedHistory()
 
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         withAnimation(Theme.fast) { turns.append(Bubble(isUser: true, text: text)) }
         context.insert(ChatMessage(role: "user", text: text))
         try? context.save()
@@ -336,6 +383,9 @@ struct ChatView: View {
         }
 
         let summary = MutationApplier.apply(reply.mutations, habits: habits, context: context)
+        UINotificationFeedbackGenerator().notificationOccurred(
+            reply.mutations.isEmpty ? .success : .success
+        )
         context.insert(ChatMessage(role: "assistant", text: reply.reply, appliedSummary: summary))
         try? context.save()
 
