@@ -20,6 +20,13 @@ enum NudgePreview {
         context.insert(occurrence)
         try? context.save()
 
+        // A preview that skips the lockdown is not a preview of this habit.
+        // Whatever the real nudge would do at its scheduled time, this does
+        // thirty seconds from now.
+        if habit.lockdownEnabled {
+            LockdownService.arm(habit: habit.id, name: habit.name, at: fireAt)
+        }
+
         return await NudgeDelivery.deliver(
             habit: habit, occurrenceID: occurrence.id, at: fireAt
         )

@@ -117,6 +117,37 @@ nonisolated public enum LockdownService {
         Lockdown.setEnabled(names)
     }
 
+    /// Arms a one-off window so a previewed nudge locks the phone exactly the
+    /// way the real one will.
+    ///
+    /// Testing the lockdown separately from the nudge was the wrong call: it
+    /// meant the thing being demonstrated was not the thing that ships. A
+    /// `DeviceActivitySchedule` is wall-clock and its interval has a fifteen
+    /// minute floor, so a preview thirty seconds out arms the window at the
+    /// current minute. The monitor extension then raises the shield as the
+    /// nudge lands.
+    public static func arm(habit: UUID, name: String, at date: Date) {
+        guard isAuthorized else { return }
+
+        var names = Lockdown.enabledNames()
+        names[habit.uuidString] = name
+        Lockdown.setEnabled(names)
+
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        let endMinute = (minute + Lockdown.maximumMinutes) % (24 * 60)
+
+        let schedule = DeviceActivitySchedule(
+            intervalStart: DateComponents(hour: minute / 60, minute: minute % 60),
+            intervalEnd: DateComponents(hour: endMinute / 60, minute: endMinute % 60),
+            repeats: false
+        )
+        let activity = DeviceActivityName(Lockdown.activityName(for: habit))
+        let center = DeviceActivityCenter()
+        center.stopMonitoring([activity])
+        try? center.startMonitoring(activity, during: schedule)
+    }
+
     public static func stopAll() {
         let center = DeviceActivityCenter()
         center.stopMonitoring(center.activities)

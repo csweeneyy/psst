@@ -103,13 +103,15 @@ struct HomeView: View {
                 // thing up there, and tapping it is how you tell the app your
                 // name, so it is not a dead affordance.
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { renaming = true } label: {
-                        MascotView(
-                            mood: MascotMood.current(habits: habits, occurrences: occurrences, now: clock),
-                            size: 30
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    // Not a `Button`: a toolbar button on iOS 26 gets a glass
+                    // circle behind it, and a bird in a bubble looks like a
+                    // badge rather than a character.
+                    MascotView(
+                        mood: MascotMood.current(habits: habits, occurrences: occurrences, now: clock),
+                        size: 30
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture { renaming = true }
                     .accessibilityLabel("Your name")
                 }
             }
@@ -165,18 +167,34 @@ struct HomeView: View {
         return name.isEmpty ? "Hi there" : "Hi \(name)"
     }
 
-    /// Progress, with no invented vocabulary.
+    /// Progress.
     ///
-    /// An earlier version named the tiers (Quiet, Listening, Steady) and had to
-    /// explain itself: "55 to Listening" tells you nothing about whether that
-    /// is good. A bar between two numbers needs no explaining, so the numbers
-    /// are the whole label.
+    /// Two earlier attempts failed for opposite reasons. Named tiers (Quiet,
+    /// Listening, Steady) needed teaching before "55 to Listening" meant
+    /// anything. A bare bar between two numbers needed even more, because
+    /// nothing on screen said the numbers were a level at all. A numbered
+    /// level is the one version nobody has to be taught.
     private var crest: some View {
         let earned = PointsService.allTime(habits)
+        let level = Level.number(for: earned)
+        let floor = Level.floor(for: earned)
         let ceiling = Level.ceiling(for: earned)
         let progress = Level.progress(for: earned)
 
-        return VStack(spacing: 7) {
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Level \(level)")
+                    .font(Theme.title(17))
+                    .foregroundStyle(Theme.Palette.ink)
+                Spacer()
+                Text("\(earned - floor) / \(ceiling - floor)")
+                    .font(Theme.caption(13).monospacedDigit())
+                    .foregroundStyle(Theme.Palette.inkSoft)
+                Text("to \(level + 1)")
+                    .font(Theme.caption(13))
+                    .foregroundStyle(Theme.Palette.inkFaint)
+            }
+
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Theme.Palette.ink.opacity(0.10))
@@ -186,20 +204,10 @@ struct HomeView: View {
                 }
             }
             .frame(height: 8)
-
-            HStack {
-                Text(earned, format: .number)
-                    .font(Theme.title(15).monospacedDigit())
-                    .foregroundStyle(Theme.Palette.ink)
-                Spacer()
-                Text(ceiling, format: .number)
-                    .font(Theme.caption(13).monospacedDigit())
-                    .foregroundStyle(Theme.Palette.inkFaint)
-            }
         }
         .animation(Theme.motion, value: earned)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(earned) points of \(ceiling)")
+        .accessibilityLabel("Level \(level), \(earned - floor) of \(ceiling - floor) points to level \(level + 1)")
     }
 
     @ViewBuilder

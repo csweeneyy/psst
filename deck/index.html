@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Psst</title>
+<style>
+  :root {
+    --ink: #161618;
+    --ink-2: #6E6E73;
+    --ink-3: #8E8E93;
+    --canvas: #F2F2F7;
+    --surface: #FFFFFF;
+    --hairline: rgba(60, 60, 67, 0.16);
+    --ok: #248A3D;
+    --bad: #C9251C;
+    --pad: clamp(28px, 5vw, 88px);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--canvas);
+  }
+
+  body {
+    font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+
+  .deck { position: relative; height: 100%; width: 100%; }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    padding: var(--pad) var(--pad) calc(var(--pad) + 22px);
+    overflow: hidden;
+  }
+
+  .slide.is-active { display: flex; }
+
+  .inner { width: 100%; max-width: 1080px; margin: 0 auto; }
+
+  .kicker {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+    margin: 0 0 clamp(14px, 2vw, 26px);
+  }
+
+  h1 {
+    font-size: clamp(52px, 8.2vw, 116px);
+    line-height: 0.96;
+    letter-spacing: -0.045em;
+    font-weight: 700;
+    margin: 0 0 clamp(18px, 2.4vw, 32px);
+  }
+
+  h2 {
+    font-size: clamp(34px, 4.6vw, 62px);
+    line-height: 1.02;
+    letter-spacing: -0.032em;
+    font-weight: 700;
+    margin: 0 0 clamp(14px, 1.8vw, 26px);
+    max-width: 22ch;
+  }
+
+  .lead {
+    font-size: clamp(19px, 1.9vw, 25px);
+    line-height: 1.42;
+    letter-spacing: -0.012em;
+    color: var(--ink);
+    max-width: 60ch;
+    margin: 0 0 clamp(20px, 2.6vw, 36px);
+  }
+
+  .lead.muted { color: var(--ink-2); }
+
+  .sub {
+    font-size: clamp(15px, 1.3vw, 18px);
+    color: var(--ink-2);
+    max-width: 66ch;
+    margin: clamp(18px, 2.2vw, 30px) 0 0;
+    letter-spacing: -0.006em;
+  }
+
+  /* Inset list surfaces: white on grouped grey, hairline rows, no shadows. */
+  .card {
+    background: var(--surface);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .row {
+    padding: clamp(12px, 1.5vw, 18px) clamp(16px, 1.8vw, 24px);
+    border-top: 1px solid var(--hairline);
+    font-size: clamp(15px, 1.35vw, 19px);
+    letter-spacing: -0.008em;
+  }
+
+  .row:first-child { border-top: 0; }
+
+  .row b { font-weight: 600; }
+
+  .row span { color: var(--ink-2); }
+
+  .cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(14px, 1.6vw, 22px);
+    align-items: start;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: clamp(10px, 1.2vw, 16px);
+  }
+
+  .stat {
+    background: var(--surface);
+    border-radius: 14px;
+    padding: clamp(14px, 1.7vw, 22px);
+  }
+
+  .stat .n {
+    display: block;
+    font-size: clamp(28px, 3.4vw, 46px);
+    font-weight: 700;
+    letter-spacing: -0.038em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat .l {
+    display: block;
+    margin-top: 8px;
+    font-size: clamp(12px, 1.05vw, 14px);
+    color: var(--ink-2);
+    letter-spacing: -0.004em;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border-radius: 14px;
+    overflow: hidden;
+    font-size: clamp(13px, 1.25vw, 18px);
+  }
+
+  th, td {
+    text-align: left;
+    padding: clamp(11px, 1.4vw, 17px) clamp(10px, 1.2vw, 18px);
+    border-top: 1px solid var(--hairline);
+    letter-spacing: -0.008em;
+    vertical-align: top;
+  }
+
+  thead th {
+    border-top: 0;
+    font-size: clamp(11px, 0.95vw, 13px);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  tbody th { font-weight: 600; }
+
+  code, .mono {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.92em;
+    letter-spacing: 0;
+  }
+
+  /* Colour is status only: yes, no, shipped, pending. */
+  .yes { color: var(--ok); font-weight: 600; }
+  .no { color: var(--bad); font-weight: 600; }
+
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 10px;
+    vertical-align: 1px;
+  }
+
+  .dot.ok { background: var(--ok); }
+  .dot.bad { background: var(--bad); }
+
+  ul { margin: 0; padding: 0; list-style: none; }
+
+  ul.bullets li {
+    font-size: clamp(16px, 1.5vw, 21px);
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    margin: 0 0 clamp(11px, 1.3vw, 17px);
+    padding-left: 22px;
+    position: relative;
+    max-width: 64ch;
+  }
+
+  ul.bullets li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 0.62em;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ink);
+  }
+
+  ul.bullets li em { font-style: normal; color: var(--ink-2); }
+
+  .title-slide h1 { font-size: clamp(76px, 15vw, 210px); letter-spacing: -0.055em; }
+
+  .rule {
+    height: 1px;
+    background: var(--hairline);
+    border: 0;
+    margin: clamp(22px, 2.6vw, 36px) 0;
+  }
+
+  /* Navigation */
+  #counter {
+    position: fixed;
+    right: var(--pad);
+    bottom: calc(var(--pad) / 2);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    z-index: 20;
+  }
+
+  .zone {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    z-index: 10;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    font: inherit;
+    color: transparent;
+  }
+
+  .zone:focus { outline: none; }
+  #prev { left: 0; width: 24%; cursor: w-resize; }
+  #next { right: 0; width: 76%; cursor: e-resize; }
+
+  /* Print mode: every slide stacked, one per page. */
+  body.print-mode { overflow: auto; }
+  body.print-mode .deck { height: auto; }
+  body.print-mode .slide {
+    position: static;
+    display: flex;
+    min-height: 100vh;
+    border-bottom: 1px solid var(--hairline);
+    break-after: page;
+    page-break-after: always;
+  }
+  body.print-mode .slide:last-child { border-bottom: 0; }
+  body.print-mode #counter,
+  body.print-mode .zone { display: none; }
+
+  @page { size: A4 landscape; margin: 12mm; }
+
+  @media print {
+    html, body { height: auto; overflow: visible; background: var(--canvas); }
+    #counter, .zone { display: none !important; }
+    .deck { height: auto; }
+    .slide {
+      position: static !important;
+      display: flex !important;
+      min-height: 92vh;
+      border-bottom: 0;
+      break-after: page;
+      page-break-after: always;
+    }
+    .card, .stat, table { border: 1px solid var(--hairline); }
+  }
+</style>
+</head>
+<body>
+
+<main class="deck" id="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide" aria-label="Psst">
+    <div class="inner">
+      <p class="kicker">01 / Psst</p>
+      <h1>Psst</h1>
+      <p class="lead">An accountability app where the notifications are the product: they arrive at
+      the right moment, in your own words, and take one tap to answer.</p>
+      <hr class="rule">
+      <p class="sub">Native Swift 6 on iOS 26. Three notification tiers, an on device scheduler,
+      a plain language assistant, and a Cloudflare Worker that holds the conversation.</p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide" aria-label="The problem">
+    <div class="inner">
+      <p class="kicker">02 / The problem</p>
+      <h2>A checklist behind an app icon you have to remember to open</h2>
+      <ul class="bullets">
+        <li>Most habit apps make the reminder a row in a list. The list waits for you, which is
+        the exact thing you already failed to do.</li>
+        <li>Notification action buttons need a long press, and only the first two render.
+        <em>No public API changes this.</em></li>
+        <li>So the fastest route to "done" runs through launching the app. A nudge that costs a
+        launch costs more than ignoring it.</li>
+        <li>A plain banner does not break Focus and does not break silent. If you asked to be
+        held to something, it never arrives.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide" aria-label="The thesis">
+    <div class="inner">
+      <p class="kicker">03 / The thesis</p>
+      <h2>The notification is the product</h2>
+      <p class="lead">A habit is a notification schedule. Every surface in the app exists to make
+      answering that notification take one tap from wherever you already are: the Lock Screen,
+      the Home Screen, the Action button.</p>
+      <div class="card">
+        <div class="row"><b>One entry point.</b> <span>Every path that puts a nudge in front of
+        you goes through <code>NudgeDelivery</code>.</span></div>
+        <div class="row"><b>Picking a tier is the product.</b> <span>A path that quietly sends a
+        banner instead is a product bug, not a shortcut. Three did: the preview, snooze
+        follow ups, and pinned occurrences folded into the plan.</span></div>
+        <div class="row"><b>Downgrades must explain themselves.</b> <span>Allowed only when the
+        API genuinely cannot accept the date, and the reason is reported.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide" aria-label="The three tiers">
+    <div class="inner">
+      <p class="kicker">04 / The core design</p>
+      <h2>Three tiers, chosen per habit</h2>
+      <p class="lead muted">This is not cosmetic. Each tier is a different iOS API with a
+      different system budget.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Tier</th>
+            <th>API</th>
+            <th>Buttons without long press</th>
+            <th>Breaks Focus and silent</th>
+            <th>Budget</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th><code>gentle</code></th>
+            <td><code>UNNotificationRequest</code></td>
+            <td class="no">no</td>
+            <td class="no">no</td>
+            <td>64 pending, shared</td>
+          </tr>
+          <tr>
+            <th><code>standard</code></th>
+            <td>ActivityKit Live Activity</td>
+            <td class="yes">yes, on Lock Screen</td>
+            <td class="no">no</td>
+            <td>undocumented, assume tiny</td>
+          </tr>
+          <tr>
+            <th><code>alarm</code></th>
+            <td>AlarmKit (iOS 26+)</td>
+            <td class="yes">yes, always</td>
+            <td class="yes">yes</td>
+            <td><code>maximumLimitReached</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="sub"><b>standard</b> exists for exactly one reason: the long press.
+      <b>alarm</b> recurs natively, so a weekday 7 AM habit is one alarm rather than one request
+      per day, and it never touches the 64 slot budget. Live Activity concurrency is undocumented,
+      so a refusal is treated as routine and those nudges degrade to plain notifications.</p>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide" aria-label="The scheduler">
+    <div class="inner">
+      <p class="kicker">05 / The constraint everything bends around</p>
+      <h2>64 pending requests, app wide, system enforced</h2>
+      <div class="stat-grid">
+        <div class="stat"><span class="n">64</span><span class="l">pending local notification
+        requests, for the whole app. No workaround. Confirmed by Apple DTS.</span></div>
+        <div class="stat"><span class="n">48 h</span><span class="l">rolling window the scheduler
+        plans against, so slots are spent where they still matter.</span></div>
+        <div class="stat"><span class="n">3</span><span class="l">snoozes maximum, and a snooze
+        actually brings the nudge back.</span></div>
+        <div class="stat"><span class="n">1 min</span><span class="l">precision on every schedule:
+        interval, fixed time, and X per day, week or month.</span></div>
+      </div>
+      <ul class="bullets" style="margin-top: clamp(18px, 2.2vw, 30px)">
+        <li>Allocation is fair, so one every 15 minutes habit cannot starve a once a day habit.</li>
+        <li>Collisions are queued across every tier at once, but the queue never affects delivery.
+        Every nudge is pre scheduled with the OS at its staggered slot, so nothing depends on the
+        app being alive.</li>
+        <li><code>sync</code> diffs and adds before it removes. Clear then rebuild left a window
+        with nothing scheduled, and an app suspended inside it fired nothing.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide" aria-label="Lockdown">
+    <div class="inner">
+      <p class="kicker">06 / Lockdown</p>
+      <h2>Every other app is shielded until the habit is done</h2>
+      <div class="cols">
+        <div>
+          <ul class="bullets">
+            <li>One tap on the block screen marks it done and gives the phone back.</li>
+            <li><code>shield.applicationCategories = .all(except: [])</code> covers every category
+            on the device. Psst is exempt automatically, which is what keeps the unlock
+            reachable.</li>
+            <li>Alarm tier only. A shield raised for a gentle reminder is a mismatch between what
+            you asked for and what you got.</li>
+            <li>Ninety minute ceiling, enforced by <code>intervalDidEnd</code>. A deleted habit or
+            a crashed extension must never leave a phone bricked.</li>
+            <li>Home Screen, Settings, and anything in Screen Time's Always Allowed are never
+            shieldable. <em>This is a commitment device, not a cage.</em></li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="row"><b><code>PsstMonitor</code></b><br><span>Woken at the habit's time with
+          the app not running. Raises the shield.</span></div>
+          <div class="row"><b><code>PsstShield</code></b><br><span>Draws the block screen.</span></div>
+          <div class="row"><b><code>PsstShieldAction</code></b><br><span>Owns the buttons.</span></div>
+          <div class="row"><span>Apple splits this across three processes and there is no way to
+          collapse them. The extensions compile two files, not the shared layer: a shield that
+          answers slowly is replaced by the system's generic blocker.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide" aria-label="The assistant">
+    <div class="inner">
+      <p class="kicker">07 / The assistant</p>
+      <h2>Plain language in, real mutations out</h2>
+      <p class="lead">It can do anything you can do in the app, with a confirmation gate on
+      anything destructive.</p>
+      <div class="card">
+        <div class="row"><b>It sees your record, not just your sentence.</b> <span>Every request
+        carries, per habit: the last 14 days daily, the last 12 weeks, the last 12 months, and the
+        date of its oldest record.</span></div>
+        <div class="row"><b>Deeper history is one extra pass.</b> <span>The model calls
+        <code>fetch_history</code>, the device resolves it against SwiftData and asks once more
+        with the data attached. Exactly one retry, so a model that keeps asking cannot loop.</span></div>
+        <div class="row"><b>Destructive calls never apply directly.</b> <span><code>deleteHabit</code>
+        and <code>clearRange</code> surface a confirmation with a concrete count first.</span></div>
+        <div class="row"><b>The minimum interval is a code floor, not a prompt instruction.</b>
+        <span>Enforced in <code>SchedulingService.fireTimes</code>, again in
+        <code>MutationApplier.apply</code>, and again in the Worker's <code>validateSchedule</code>.
+        A model cannot talk past it.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide" aria-label="Adaptive scheduling">
+    <div class="inner">
+      <p class="kicker">08 / Adaptation</p>
+      <h2>It moves nudges to the hours you actually answer</h2>
+      <p class="lead muted"><code>ScheduleAdvisor</code> is the piece that makes the app adaptive
+      rather than merely configurable. It reads the response heatmap and returns at most one
+      suggestion.</p>
+      <div class="stat-grid">
+        <div class="stat"><span class="n">8</span><span class="l">answered nudges overall before
+        it will speak at all.</span></div>
+        <div class="stat"><span class="n">3</span><span class="l">answers in a given hour before
+        that hour counts as reliable.</span></div>
+        <div class="stat"><span class="n">1</span><span class="l">suggestion at a time, maximum.
+        A suggestion rejected twice is worse than none.</span></div>
+        <div class="stat"><span class="n">1 tap</span><span class="l">to apply, from habit detail
+        or the weekly review.</span></div>
+      </div>
+      <p class="sub">It will not propose tightening a window unless a reliably answered hour
+      survives the trim. Suggestions are derived from when you actually answer, not when you said
+      you would.</p>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide" aria-label="Under the hood">
+    <div class="inner">
+      <p class="kicker">09 / Under the hood</p>
+      <h2>Native, because the APIs are the product</h2>
+      <div class="cols">
+        <div class="card">
+          <div class="row"><b>Device</b><br><span>Swift 6 with
+          <code>SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor</code>, SwiftData, UserNotifications,
+          ActivityKit, AlarmKit, FamilyControls, App Intents, WidgetKit.</span></div>
+          <div class="row"><b><code>ios/Shared/</code></b><br><span>Compiled into both the app and
+          the widget extension: pure types, the intents, and the 64 slot planner.</span></div>
+          <div class="row"><b>Native Swift, not React Native.</b><br><span>A bridge would gate
+          <code>UNUserNotificationCenter</code>, ActivityKit and AlarmKit, which are the
+          product.</span></div>
+        </div>
+        <div class="card">
+          <div class="row"><b>Worker</b><br><span>A Cloudflare Worker on D1 holds the API key and
+          the conversation. Provider agnostic: Anthropic plus one OpenAI compatible adapter
+          covering OpenRouter, Fireworks, DeepSeek, Groq and OpenAI.</span></div>
+          <div class="row"><b><code>MODEL_CHAIN</code></b><br><span>An ordered list of
+          <code>provider:model</code> tried in turn. Escalation is driven by observed failure,
+          never by predicting difficulty. A 4xx that is our own fault does not escalate, because
+          the next model would receive the same malformed request.</span></div>
+          <div class="row"><b>Models chosen by measurement.</b><br><span><code>bun run eval</code>
+          runs real phrasings and checks the resulting mutations, including a floor that must not
+          be undercut and a vague complaint that should be answered with a question.</span></div>
+        </div>
+      </div>
+      <p class="sub">The device owns the habits, the Worker owns the conversation. The app works
+      offline; D1 mirrors habits only so a future push scheduler has something to read.</p>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide" aria-label="What is real">
+    <div class="inner">
+      <p class="kicker">10 / Status</p>
+      <h2>What is real today</h2>
+      <div class="stat-grid">
+        <div class="stat"><span class="n">52</span><span class="l">unit tests across 9 files,
+        including <code>ReconciliationTests</code> and <code>WireFormatTests</code>.</span></div>
+        <div class="stat"><span class="n">2</span><span class="l">UI flows driven end to end in
+        <code>FlowSmokeTests</code>.</span></div>
+        <div class="stat"><span class="n">52</span><span class="l">tickets closed in
+        <code>board/done</code>, written up with the decisions.</span></div>
+        <div class="stat"><span class="n">3 / 3</span><span class="l">tiers delivering on real
+        hardware, lockdown included.</span></div>
+      </div>
+      <div class="card" style="margin-top: clamp(16px, 2vw, 26px)">
+        <div class="row"><span class="dot ok"></span><b>Scheduling runs on device.</b>
+        <span>Interval, fixed time, and X per day, week or month, at minute precision.</span></div>
+        <div class="row"><span class="dot ok"></span><b>Verified on the phone, not the simulator.</b>
+        <span>Live Activities and AlarmKit cannot be exercised in the simulator. All four lockdown
+        binaries carry the Family Controls entitlement.</span></div>
+        <div class="row"><span class="dot bad"></span><b>Family Controls is a managed capability.</b>
+        <span>Development signs fine; TestFlight and the App Store need Apple's approval,
+        requested by the Account Holder.</span></div>
+        <div class="row"><span class="dot bad"></span><b>Not built yet.</b> <span>Push driven
+        rescheduling, the Apple Watch app, and texting the app over SMS are still in
+        <code>board/not-done</code>.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide" aria-label="Close">
+    <div class="inner">
+      <p class="kicker">11 / Close</p>
+      <h2>A habit is a notification schedule</h2>
+      <p class="lead">Every design call in Psst falls out of that one sentence: the tiers, the
+      64 slot planner, the shield, the assistant's floor, the advisor's silence.</p>
+      <div class="card">
+        <div class="row"><b>Arrive at the right moment.</b> <span>Adaptive suggestions come from
+        when you answer, not when you said you would.</span></div>
+        <div class="row"><b>In your own words.</b> <span>Talk to the assistant in plain language;
+        it edits the schedule you are held to.</span></div>
+        <div class="row"><b>One tap to answer.</b> <span>Lock Screen, Home Screen widget, Action
+        button, and the shield itself.</span></div>
+      </div>
+      <p class="sub"><code>cd ios &amp;&amp; xcodegen generate &amp;&amp; open Psst.xcodeproj</code>
+      <br>Requires Xcode 26.1+ and an iOS 26 device.</p>
+    </div>
+  </section>
+
+</main>
+
+<button class="zone" id="prev" type="button" aria-label="Previous slide">Previous</button>
+<button class="zone" id="next" type="button" aria-label="Next slide">Next</button>
+<div id="counter" aria-live="polite">1 / 11</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var total = slides.length;
+  var printMode = /(^|[?&])print(=|&|$)/.test(window.location.search);
+  var index = 0;
+
+  if (printMode) {
+    document.body.classList.add('print-mode');
+    slides.forEach(function (s) { s.classList.add('is-active'); });
+    counter.textContent = total + ' / ' + total;
+    return;
+  }
+
+  function show(n) {
+    index = n < 0 ? 0 : (n > total - 1 ? total - 1 : n);
+    for (var i = 0; i < total; i++) {
+      if (i === index) {
+        slides[i].classList.add('is-active');
+      } else {
+        slides[i].classList.remove('is-active');
+      }
+    }
+    counter.textContent = (index + 1) + ' / ' + total;
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', '#s' + (index + 1));
+    }
+  }
+
+  function fromHash() {
+    var m = /^#s(\d+)$/.exec(window.location.hash);
+    return m ? parseInt(m[1], 10) - 1 : 0;
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) { return; }
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || k === ' ' || k === 'Spacebar') {
+      e.preventDefault();
+      show(index + 1);
+    } else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp') {
+      e.preventDefault();
+      show(index - 1);
+    } else if (k === 'Home') {
+      e.preventDefault();
+      show(0);
+    } else if (k === 'End') {
+      e.preventDefault();
+      show(total - 1);
+    }
+  });
+
+  document.getElementById('prev').addEventListener('click', function () { show(index - 1); });
+  document.getElementById('next').addEventListener('click', function () { show(index + 1); });
+  window.addEventListener('hashchange', function () { show(fromHash()); });
+
+  show(fromHash());
+})();
+</script>
+
+</body>
+</html>

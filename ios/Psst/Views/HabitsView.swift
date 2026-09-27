@@ -188,17 +188,32 @@ struct HabitRow: View {
 
             Spacer(minLength: Theme.Space.s)
 
-            Text("\(habit.dailyPoints)")
-                .font(Theme.footnote(14).monospacedDigit())
-                .foregroundStyle(Theme.Palette.inkSoft)
+            // Fixed widths, not intrinsic ones. Points run one to three
+            // digits and the tier symbols are all different shapes, so an
+            // intrinsically sized row puts every icon at a slightly different
+            // x and the list reads as ragged down the right edge.
+            HStack(spacing: Theme.Space.s) {
+                Text("\(habit.dailyPoints)")
+                    .font(Theme.footnote(14).monospacedDigit())
+                    .foregroundStyle(Theme.Palette.inkSoft)
+                    .frame(width: 26, alignment: .trailing)
 
-            Image(systemName: habit.intensity.symbol)
-                .font(.system(size: 12))
-                .foregroundStyle(habit.intensity.accent)
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.Palette.inkSoft)
+                    .opacity(habit.lockdownEnabled ? 1 : 0)
+                    .frame(width: 12)
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.Palette.inkFaint)
+                Image(systemName: habit.intensity.symbol)
+                    .font(.system(size: 12))
+                    .foregroundStyle(habit.intensity.accent)
+                    .frame(width: 16)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.inkFaint)
+                    .frame(width: 8)
+            }
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.vertical, Theme.Space.m)

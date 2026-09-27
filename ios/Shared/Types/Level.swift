@@ -13,6 +13,14 @@ import Foundation
 nonisolated public enum Level: Sendable {
     public static let thresholds: [Int] = [0, 150, 450, 1000, 2000, 4000, 7500, 12000]
 
+    /// Which level the score is in, counting from one.
+    public static func number(for points: Int) -> Int {
+        let passed = thresholds.filter { points >= $0 }.count
+        guard passed >= thresholds.count else { return max(passed, 1) }
+        let step = thresholds[thresholds.count - 1] - thresholds[thresholds.count - 2]
+        return thresholds.count + (points - thresholds[thresholds.count - 1]) / step
+    }
+
     /// The threshold you have already passed.
     public static func floor(for points: Int) -> Int {
         thresholds.last { points >= $0 } ?? 0
