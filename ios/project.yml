@@ -1,0 +1,124 @@
+name: Psst
+options:
+  bundleIdPrefix: com.connorsweeney
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    DEVELOPMENT_TEAM: "6PY7VW3XF9"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  Psst:
+    type: application
+    platform: iOS
+    sources:
+      - path: Shared
+      - path: Psst
+    dependencies:
+      - target: PsstWidgets
+        embed: true
+    entitlements:
+      path: Psst/Psst.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.connorsweeney.Psst
+    info:
+      path: Psst/Info.plist
+      properties:
+        CFBundleDisplayName: Psst
+        PsstAPIBase: https://psst.connorpsweeney.workers.dev
+        UILaunchScreen: {}
+        UIBackgroundModes: [fetch, processing, remote-notification]
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: true
+        NSAlarmKitUsageDescription: >-
+          Psst uses alarms for habits you mark as must-not-miss, so the reminder
+          reaches you even when your phone is silenced or in a Focus mode.
+        NSSpeechRecognitionUsageDescription: >-
+          Psst transcribes your voice so you can adjust your habits without typing.
+        NSMicrophoneUsageDescription: >-
+          Psst needs the microphone to hear you when you talk to it.
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.connorsweeney.Psst.refresh
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.connorsweeney.Psst
+        INFOPLIST_KEY_UIUserInterfaceStyle: Light
+        TARGETED_DEVICE_FAMILY: "1"
+
+  PsstWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Shared
+      - path: PsstWidgets
+    entitlements:
+      path: PsstWidgets/PsstWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.connorsweeney.Psst
+    info:
+      path: PsstWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Psst
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.connorsweeney.Psst.Widgets
+        TARGETED_DEVICE_FAMILY: "1"
+
+  PsstUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: PsstUITests
+    dependencies:
+      - target: Psst
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.connorsweeney.Psst.UITests
+        GENERATE_INFOPLIST_FILE: YES
+
+  PsstTests:
+    type: bundle.unit-test
+    platform: iOS
+    # Only the test files. `Shared` is compiled into the app target, and
+    # recompiling it here too produces two copies of every type, which fails
+    # to link against `@testable import Psst`.
+    sources:
+      - path: PsstTests
+    dependencies:
+      - target: Psst
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.connorsweeney.Psst.Tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Psst.app/Psst"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  Psst:
+    build:
+      targets:
+        Psst: all
+        PsstWidgets: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - PsstTests
+        - PsstUITests
