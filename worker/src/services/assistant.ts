@@ -43,6 +43,10 @@ const TURN_MS = 38_000;
  */
 const MAX_PASSES = 4;
 
+/// How many times a model may be shown its own schema error and asked again
+/// before the turn is handed to a slower model.
+const MAX_REPAIRS = 1;
+
 interface Budget {
   /** Wall clock the whole turn must be done by. */
   deadline: number;
@@ -135,6 +139,7 @@ async function attempt(
 
   const mutations: Mutation[] = [];
   const failures: string[] = [];
+  let repairs = 0;
   let inputTokens = 0;
   let outputTokens = 0;
 
@@ -211,20 +216,38 @@ async function attempt(
       if (converted.ok) {
         mutations.push(converted.mutation);
         results.push({ id: call.id, content: "Applied." });
-      } else {
-        failures.push(`${call.name}: ${converted.error}`);
-        results.push({ id: call.id, content: converted.error, isError: true });
+        continue;
       }
+      // A history request reaching this line is one that cannot be honoured:
+      // either the range was malformed, or changes are already staged and the
+      // reply carrying a dataRequest cannot carry those too. Saying "unknown
+      // tool" would be a lie the model then tries to work around.
+      const reason =
+        call.name === "fetch_history"
+          ? "History is not available this turn. Answer from the series in the prompt."
+          : converted.error;
+      failures.push(`${call.name}: ${reason}`);
+      results.push({ id: call.id, content: reason, isError: true });
     }
 
-    // Not one call has ever converted. The model does not understand the
-    // schema, so asking it again is pointless; hand the turn to the next model.
+    // Not one call converted. Handing straight to the next model is what made
+    // every failed edit cost twenty seconds: measured, deepseek-v4.1-flash
+    // intermittently omits `schedule.kind` on update_schedule, and escalating
+    // to deepseek-v4-pro turned a 4 second turn into a 24 second one. The
+    // error text is already going back as a tool result, and a model that
+    // dropped one required field usually fills it in when told which field it
+    // was. Give it exactly one chance to correct itself, then escalate: a
+    // model that fails twice really does not understand the schema.
     if (mutations.length === 0) {
-      return {
-        ok: false,
-        error: `all tool calls were invalid (${failures.join("; ")})`,
-        retryable: true,
-      };
+      if (repairs >= MAX_REPAIRS || pass === MAX_PASSES - 1 || leash(budget) <= 0) {
+        return {
+          ok: false,
+          error: `all tool calls were invalid (${failures.join("; ")})`,
+          retryable: true,
+        };
+      }
+      repairs += 1;
+      failures.length = 0;
     }
 
     messages.push({ role: "assistant", text: reply.value.text, toolCalls: reply.value.toolCalls });

@@ -133,7 +133,17 @@ nonisolated public enum LockdownService {
         names[habit.uuidString] = name
         Lockdown.setEnabled(names)
 
-        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+        // Round up to the next whole minute. A `DeviceActivitySchedule` is
+        // wall-clock to the minute, so arming at the nudge's own minute means
+        // the window is usually already open and the shield slams up the
+        // moment you tap preview, before the nudge has even arrived. A shield
+        // that lands just after the nudge is the right order; one that lands
+        // before it is a different product.
+        let calendar = Calendar.current
+        let onTheMinute = calendar.date(bySetting: .second, value: 0, of: date) ?? date
+        let armAt = onTheMinute <= date ? onTheMinute.addingTimeInterval(60) : onTheMinute
+
+        let parts = calendar.dateComponents([.hour, .minute], from: armAt)
         let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
         let endMinute = (minute + Lockdown.maximumMinutes) % (24 * 60)
 

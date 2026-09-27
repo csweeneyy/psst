@@ -1,10 +1,12 @@
-# Deck
+# The Psst deck
 
-Eleven slides on Psst. One self contained file, no build step, no network.
+All the words live in `slides.js`. Open it in any text editor, type over a
+sentence, save, reload the page. Nothing to install and nothing to build.
 
-    open index.html
+Open it: double click `index.html`. Any browser, no server needed.
 
-Arrow keys, Space, or click: left quarter back, the rest forward. Counter bottom right, `#s4` opens slide 4.
+Move around: arrow keys or space, or click the right side of the window to go
+forward and the left quarter to go back. The counter is bottom right.
 
-PDF: open `index.html?print` to stack every slide, then File > Print,
-Landscape, Background Graphics on, Save as PDF.
+Export a PDF: open `index.html?print`, then File, Print, Save as PDF, margins
+set to none. Every slide comes out on its own page.
