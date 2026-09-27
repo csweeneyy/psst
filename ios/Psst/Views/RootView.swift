@@ -12,6 +12,7 @@ import SwiftUI
 /// narrow zones at the screen edges where no row gesture lives.
 struct RootView: View {
     @Environment(NotificationResponder.self) private var responder
+    @AppStorage("hasOnboarded") private var hasOnboarded = false
     @State private var screen = Screen.home
 
     enum Screen: Int, Hashable, CaseIterable {
@@ -19,6 +20,14 @@ struct RootView: View {
     }
 
     var body: some View {
+        if hasOnboarded {
+            tabs
+        } else {
+            OnboardingView().transition(.opacity)
+        }
+    }
+
+    private var tabs: some View {
         TabView(selection: $screen) {
             Tab(value: Screen.chat) {
                 ChatView(embedded: true)

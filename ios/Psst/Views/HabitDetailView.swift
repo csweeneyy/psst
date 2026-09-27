@@ -12,6 +12,7 @@ struct HabitDetailView: View {
 
     @State private var editing = false
     @State private var confirmingDelete = false
+    @State private var previewAt: Date?
     @State private var notes = ""
     @FocusState private var notesFocused: Bool
 
@@ -38,6 +39,7 @@ struct HabitDetailView: View {
                 recent
                 timeOfDay
                 notesSection
+                preview
                 actions
             }
             .listStyle(.insetGrouped)
@@ -235,6 +237,45 @@ struct HabitDetailView: View {
             .focused($notesFocused)
             .listRowBackground(Theme.Palette.surface)
         }
+    }
+
+    /// Fires this habit's nudge in ten seconds, through its real tier.
+    ///
+    /// Written for a demo, kept because it is the only way to answer "what
+    /// does Alarm actually feel like" without waiting for the schedule.
+    private var preview: some View {
+        Section {
+            Button { Task { await firePreview() } } label: {
+                HStack {
+                    Label("Preview this nudge", systemImage: "play.circle")
+                        .foregroundStyle(Theme.Palette.ink)
+                    Spacer()
+                    if let previewAt {
+                        Text(previewAt, style: .relative)
+                            .font(Theme.footnote(13).monospacedDigit())
+                            .foregroundStyle(Theme.Palette.inkSoft)
+                    }
+                }
+            }
+            .buttonStyle(.borderless)
+            .listRowBackground(Theme.Palette.surface)
+        } footer: {
+            Text("Fires in 10 seconds as a real \(habit.intensity.title) nudge. Lock your phone to see it the way you normally would.")
+        }
+    }
+
+    private func firePreview() async {
+        let fireAt = Date.now.addingTimeInterval(10)
+        let occurrence = HabitOccurrence(scheduledAt: fireAt, habit: habit)
+        occurrence.isPinned = true
+        context.insert(occurrence)
+        try? context.save()
+
+        await NotificationService.scheduleNow(
+            habit: habit, occurrenceID: occurrence.id, fireAt: fireAt
+        )
+        withAnimation(Theme.fast) { previewAt = fireAt }
+        await onChange()
     }
 
     private var actions: some View {

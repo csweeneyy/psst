@@ -19,9 +19,11 @@ struct PsstApp: App {
                     responder.container = PsstStore.shared
                     responder.coordinator = coordinator
                     KeyboardWarmer.warm()
-                    if DebugSeed.isEnabled { DebugSeed.populate(ModelContext(PsstStore.shared)) }
-                    await coordinator.requestPermissions()
-                    await coordinator.resync(context: ModelContext(PsstStore.shared))
+                    if SampleData.isForced { SampleData.install(into: PsstStore.shared.mainContext) }
+                    if UserDefaults.standard.bool(forKey: "hasOnboarded") {
+                        await coordinator.requestPermissions()
+                    }
+                    await coordinator.resync(context: PsstStore.shared.mainContext)
                 }
         }
         // Scene bodies are not evaluated on a background intent launch, so the

@@ -5,9 +5,12 @@ import XCTest
 /// reachable; the unit tests only cover the scheduling maths.
 nonisolated final class FlowSmokeTests: XCTestCase {
 
-    private func launch() -> XCUIApplication {
+    private func launch(onboarded: Bool = true) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["PSST_SEED"] = "1"
+        if onboarded {
+            app.launchArguments += ["-hasOnboarded", "YES"]
+        }
         app.launch()
         // The notification permission alert blocks the first tap.
         addUIInterruptionMonitor(withDescription: "permissions") { alert in
@@ -27,6 +30,37 @@ nonisolated final class FlowSmokeTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    /// First run has to explain the app and end somewhere usable. It is the
+    /// only place the three tiers are described.
+    func testOnboardingExplainsTheTiersAndFinishes() {
+        let app = launch(onboarded: false)
+
+        XCTAssertTrue(app.staticTexts["Reminders you\nactually answer."].waitForExistence(timeout: 10))
+        shot(app, "00-onboarding-intro")
+
+        app.buttons["Continue"].tap()
+        XCTAssertTrue(app.staticTexts["Gentle"].waitForExistence(timeout: 4))
+        XCTAssertTrue(app.staticTexts["Standard"].exists)
+        XCTAssertTrue(app.staticTexts["Alarm"].exists)
+        shot(app, "00-onboarding-tiers")
+
+        app.buttons["Continue"].tap()
+        let sample = app.buttons["Allow, and fill it with sample habits"]
+        XCTAssertTrue(sample.waitForExistence(timeout: 4))
+        shot(app, "00-onboarding-start")
+        sample.tap()
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let allow = springboard.buttons["Allow"]
+        if allow.waitForExistence(timeout: 8) { allow.tap() }
+
+        XCTAssertTrue(
+            app.staticTexts["Today"].waitForExistence(timeout: 10),
+            "onboarding did not land on the app"
+        )
+        XCTAssertTrue(app.staticTexts["Posture check"].waitForExistence(timeout: 6))
     }
 
     func testWalksTodayHabitsSetupAndChat() {
