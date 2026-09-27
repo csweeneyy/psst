@@ -21,6 +21,12 @@
     card:     lines shown in a white box, one per row.
     table:    a grid. See the tiers slide for the shape.
     note:     the small print at the bottom of the slide.
+    icon:     the app icon, big. Only the opening slide uses this.
+    shots:    up to two screenshots down the right hand side, like
+              shots: ["img/home.png", "img/chat.png"]
+              The last one in the list is the one in front.
+              Files live in the img folder. Drop a new PNG in there and
+              name it here to use it.
 
   Three typing shortcuts:
     *Words in stars* come out bold.
@@ -39,20 +45,20 @@ const SLIDES = [
   {
     kicker: "Psst",
     big: "Psst",
-    lead: "You already know what you should be doing. Psst is built for the ten seconds where you decide whether to actually do it.",
-    note: "An iPhone app. You choose, habit by habit, how hard the reminder is to ignore.",
+    icon: "img/icon.png",
+    lead: "Psst is built for the ten seconds where you decide whether to actually do it.",
+    note: "An iOS app that keeps you accountable. You choose, habit by habit, how hard the reminder is to ignore.",
   },
 
   {
     kicker: "The problem",
     title: "Reminders fail at the last inch",
-    lead: "The reminder arrives. Your thumb swipes it away before you have finished reading it, and nothing about the day changed.",
+    lead: "A reminder arrives, and your thumb swipes it away before you have finished reading it, and nothing about the day changed.",
     bullets: [
-      "You did not forget. You were asked, and you said no in half a second, without deciding anything.",
-      "Ignoring a banner costs nothing. Doing it properly costs opening the app, finding the row, tapping the circle.",
-      "And on the evening you most needed holding to something, Focus was on, so it never arrived at all.",
+      "Ignoring a banner costs nothing, and doing it properly is too much friction.",
+      "Imagine the night you most needed to continue your habit, Do Not Disturb was on, so it never arrived at all.",
     ],
-    note: "The problem is not knowing what to do. It is the moment of being asked. Buttons on an ordinary notification need a long press and only the first two appear, so in most apps the quick route still runs through opening the app.",
+    note: "The problem is not knowing what to do. It is the moment of being asked.",
   },
 
   {
@@ -61,15 +67,15 @@ const SLIDES = [
     lead: "Psst is a notification you answer, not a list you visit. Done happens where the nudge already is: the Lock Screen, the widget, the Action button, the block screen.",
     card: [
       "*One tap, wherever you already are.* You never have to open the app to answer a nudge.",
-      "*One way out.* Every nudge leaves by the same door, so the setting you chose is what actually arrives.",
-      "*A quieter version has to explain itself.* Psst only falls back when the system refuses the real thing, and it reports why.",
+      "*The setting you chose is what arrives.* Every nudge leaves by the same door, so persistent means persistent.",
+      "*Answering is faster than dismissing.* The quick route runs through the notification, not through the app.",
     ],
-    note: "`NudgeDelivery` is that single door. Three paths once went around it (the preview, snooze follow ups, and hand moved nudges) and all three counted as product bugs rather than shortcuts.",
+    shots: ["img/home.png"],
   },
 
   {
     kicker: "Your call, per habit",
-    title: "You pick how loud it gets",
+    title: "You pick how persistent and loud a notification gets",
     lead: "Flossing gets something you can wave away. The thing you genuinely cannot miss gets something that goes off through silent and Focus.",
     table: {
       columns: ["How it feels", "What it is", "Through silent and Focus"],
@@ -91,59 +97,72 @@ const SLIDES = [
         ],
       ],
     },
-    note: "iOS allows 64 pending notifications for an entire app, system enforced. The planner works a rolling 48 hour window and shares it out fairly, so a habit set to every 15 minutes cannot crowd out the one you check once a day. Alarms repeat on their own and never touch that budget.",
+    note: "One habit can be a whisper and the next can be impossible to sleep through. Nothing else on the App Store lets you choose that per habit.",
   },
 
   {
-    kicker: "The one you keep skipping",
-    title: "It can hold your phone hostage",
-    lead: "Turn it on for one habit and every other app is shielded when that habit comes due. One tap on the block screen gives the phone back.",
+    kicker: "The one habit you keep skipping",
+    title: "Lockdown your entire phone",
+    lead: "Turn it on for one habit (eg. Morning Routine) and every other app is shielded when that habit comes due. Your phone is only given back to you when you log an activity as done.",
     bullets: [
-      "You set it up on a calm afternoon, for the version of you who will not feel like it at 7 AM.",
-      "Loudest tier only. Shielding your phone over a flossing reminder is not what you asked for.",
-      "It lifts itself after ninety minutes whatever happens, so a deleted habit or a crash can never leave you locked out.",
-      "The Home Screen, Settings, and anything you marked Always Allowed stay reachable. A commitment device, not a cage.",
+      "Set it up once, to hold your future self accountable.",
+      "While this push is active, you cannot access other apps on your phone until you log it as done.",
+      "Used for highest priority, high value, and time sensitive activities such as the first 20 minutes after waking or the hour before bed.",
     ],
-    note: "Apple splits this across three separate processes and there is no way to collapse them. A shield that answers slowly gets replaced by the system's own generic block screen, so those extensions are kept deliberately small.",
+    note: "Built on Apple's Screen Time framework, so the block holds at the system level.",
   },
 
   {
     kicker: "Setting it up",
-    title: "You say it, instead of filling in a form",
+    title: "Talk to it, instead of filling in a form",
     lead: 'Say "remind me to stretch every couple of hours, but not before ten" and the schedule changes. No pickers, no hunting for a toggle.',
     card: [
       "*It does anything you can do in the app.* Making habits, moving them, changing how loud they are.",
       "*It has your record, not just your sentence.* The last 14 days, 12 weeks and 12 months per habit.",
       "*It asks rather than guesses.* A vague complaint comes back as a question about what you meant.",
       "*Deleting stops for a yes.* Anything destructive shows you the exact count first and waits.",
-      "*It cannot water your habits down.* The minimum gap between nudges is enforced in code, in three places, so talking cannot get past it.",
     ],
-    note: "The conversation runs through a Cloudflare Worker that holds the key. Models were picked by scoring real phrasings against the changes they produced, not by reputation.",
+    shots: ["img/chat.png", "img/chat-reply.png"],
   },
 
   {
     kicker: "It adapts",
     title: "It learns when you answer",
-    lead: "You said 7 AM. You answer at 8:40, most days. Psst notices and offers to move it. The app bends to you rather than the other way round.",
+    lead: "You said 7 AM. You answer at 8:40, most days. Psst notices and offers to move it, so the app bends to you rather than the other way round.",
     bullets: [
       "It goes by when you answer, not by when you said you would.",
-      "It stays quiet until it is sure: 8 answered nudges overall, and 3 in the same hour, before it says anything.",
-      "One suggestion at a time, at most. A suggestion you turn down twice is worse than none.",
-      "Move one reminder by hand and it stays moved, even after the rest of the schedule is recalculated.",
+      "It waits until the pattern is real before it says anything, and the move is always one tap you can decline.",
     ],
-    note: "`ScheduleAdvisor` reads the heatmap of when you respond, and it will not narrow a window unless an hour you reliably answer survives the trim. On seeded data it found 100% at 11 AM and 0% at 6 PM without being told the pattern was there.",
+    shots: ["img/detail.png"],
+  },
+
+  {
+    kicker: "Staying with it",
+    title: "The streak is the point",
+    lead: "Every nudge you answer is on the record: a streak, a fourteen day strip, a month at a glance, and a weekly review that tells you which hour of the day you are actually winning.",
+    bullets: [
+      "Points per habit per day, so scheduling more nudges cannot inflate your score.",
+      "Snooze brings it back, three times at most, then it stops pretending you will do it later.",
+    ],
+    shots: ["img/calendar.png", "img/review.png"],
   },
 
   {
     kicker: "Where it stands",
-    title: "What is real today, and what is not",
+    title: "It runs on a real iPhone today",
     card: [
-      "*Real.* All three intensities deliver on a real iPhone, the lockdown included, and the schedule holds while the phone is locked.",
-      "*Real.* Streaks, a 14 day strip, a month calendar, a weekly review, a Home Screen widget, an Action button, points and levels, and a snooze that genuinely brings it back, three times at most.",
-      "*Not yet.* Anyone else's phone. Shielding apps is a capability Apple has to approve before this can go out on TestFlight.",
-      "*Not yet.* Rescheduling driven from the server, an Apple Watch app, and answering a nudge by text message.",
+      "*All three tiers deliver on hardware*, lockdown included, and the schedule holds while the phone is locked.",
+      "*Streaks, a month calendar, a weekly review*, a Home Screen widget, an Action button, points and levels.",
+      "*Written in Swift 6 for iOS 26*, using Apple's newest notification frameworks the week they shipped.",
     ],
-    note: "52 tickets closed in `board/done`, each written up with the reasoning behind it, and 5 still open. Live Activities and AlarmKit cannot run in the simulator, so all of this was checked on hardware.",
+    note: "Live Activities and AlarmKit cannot run in the simulator, so every tier was built and checked on a physical device.",
+  },
+
+  {
+    kicker: "Psst",
+    title: "A habit is not a list. It is a moment.",
+    lead: "Psst is the app that shows up in that moment and makes answering easier than ignoring.",
+    shots: ["img/habits.png", "img/home.png"],
   },
 
 ];

@@ -1,12 +1,14 @@
-# The Psst deck
+# The deck
 
-All the words live in `slides.js`. Open it in any text editor, type over a
-sentence, save, reload the page. Nothing to install and nothing to build.
+Open `index.html` in a browser. Arrow keys or Space to move, click the left and
+right thirds of the slide to move by mouse.
 
-Open it: double click `index.html`. Any browser, no server needed.
+**All the words live in `slides.js`.** Open it in any text editor, type over a
+sentence, save, reload the page. The top of that file explains every field in
+plain English. Nothing to build, nothing to install.
 
-Move around: arrow keys or space, or click the right side of the window to go
-forward and the left quarter to go back. The counter is bottom right.
+Screenshots live in `img/`. Drop a PNG in there and name it in a slide's
+`shots` list to use it. Two per slide is the most that fits.
 
-Export a PDF: open `index.html?print`, then File, Print, Save as PDF, margins
-set to none. Every slide comes out on its own page.
+To export a PDF: open `index.html?print`, then print to PDF with margins set
+to none and background graphics turned on.

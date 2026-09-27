@@ -201,6 +201,52 @@
   }
 
   /* Navigation */
+  /* Screenshots. Deliberately unframed: a drawn bezel dates a deck faster
+     than anything else, and the app's own rounded corners read as a phone. */
+  .shots {
+    position: absolute;
+    right: 56px;
+    bottom: -34px;
+    display: flex;
+    align-items: flex-end;
+    gap: 22px;
+    pointer-events: none;
+  }
+  .shots img {
+    display: block;
+    width: 232px;
+    border-radius: 26px;
+    border: 1px solid rgba(22, 22, 24, 0.10);
+  }
+  .shots img.back { width: 204px; opacity: 0.5; margin-bottom: 30px; }
+  .slide.has-shots .inner { max-width: 620px; }
+  .slide.has-shots h2 { font-size: 46px; }
+
+  .title-icon {
+    width: 112px;
+    height: 112px;
+    border-radius: 25px;
+    display: block;
+    margin-bottom: 26px;
+    border: 1px solid rgba(22, 22, 24, 0.08);
+  }
+
+  .stamp {
+    position: absolute;
+    left: 64px;
+    bottom: 34px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .stamp img { width: 20px; height: 20px; border-radius: 5px; }
+  .stamp span {
+    font-size: 12px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: rgba(22, 22, 24, 0.34);
+  }
+
   #counter {
     position: fixed;
     right: 26px;
@@ -332,6 +378,7 @@
     if (slide.kicker) {
       html += '<p class="kicker">' + (n < 10 ? '0' + n : n) + ' / ' + fmt(slide.kicker) + '</p>';
     }
+    if (slide.icon) { html += '<img class="title-icon" src="' + slide.icon + '" alt="">'; }
     if (slide.big) { html += '<h1>' + fmt(slide.big) + '</h1>'; }
     if (slide.title) { html += '<h2>' + fmt(slide.title) + '</h2>'; }
     if (slide.lead) { html += '<p class="lead">' + fmt(slide.lead) + '</p>'; }
@@ -359,7 +406,20 @@
     var section = document.createElement('section');
     section.className = 'slide' + (slide.big ? ' title-slide' : '');
     section.setAttribute('aria-label', slide.title || slide.big || ('Slide ' + (i + 1)));
-    section.innerHTML = '<div class="inner">' + slideHtml(slide, i + 1) + '</div>';
+    var shots = '';
+    if (slide.shots && slide.shots.length) {
+      section.className += ' has-shots';
+      shots = '<div class="shots">';
+      slide.shots.forEach(function (src, k) {
+        shots += '<img class="' + (k < slide.shots.length - 1 ? 'back' : '') + '" src="' + src + '" alt="">';
+      });
+      shots += '</div>';
+    }
+    // Every slide but the title carries the mark, so a photographed slide is
+    // still obviously this product.
+    var stamp = slide.big ? '' :
+      '<div class="stamp"><img src="img/icon.png" alt=""><span>Psst</span></div>';
+    section.innerHTML = '<div class="inner">' + slideHtml(slide, i + 1) + '</div>' + shots + stamp;
     deck.appendChild(section);
   });
 
