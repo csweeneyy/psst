@@ -272,3 +272,23 @@ weekly review, and apply in one tap.
 - **A hand-moved nudge is pinned.** `HabitOccurrence.isPinned` survives a
   resync, so moving one reminder to 5:01 does not get undone the next time the
   habit's schedule is recomputed.
+- **The lockdown extensions compile two files, not the shared layer.** A
+  shield extension that answers slowly is replaced by the system's own generic
+  blocker, so linking SwiftData, ActivityKit and AlarmKit into it would be
+  paid for on screen. `Lockdown.appGroup` owns the app group id so
+  `Lockdown.swift` and `LockdownService.swift` stand alone.
+- **Lockdown is alarm tier only, and expires after ninety minutes.** A shield
+  raised for a gentle reminder is a mismatch between what you asked for and
+  what you got; an unbounded shield is a bricked phone when a habit is deleted.
+- **Levels have no names.** They were Quiet through Unmissable, which forced
+  the UI to write "55 to Listening": unreadable without first learning the
+  ladder. Points between two numbers explain themselves.
+- **Adding a property to `Habit` needs a default value.** `lockdownEnabled`
+  has one, so devices migrated in place. Without one SwiftData recreates the
+  store, which is how the simulator lost its data on that build and the phone
+  did not.
+- **Family Controls signing lives in Xcode, not the portal.** Adding the Apple
+  ID in Xcode Settings registers the capability on the App ID and fetches the
+  regenerated profile; the website only does the first half, and
+  `xcodebuild -allowProvisioningUpdates` fails with `No Accounts` until it is
+  there.
