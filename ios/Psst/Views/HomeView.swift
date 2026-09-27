@@ -49,6 +49,11 @@ struct HomeView: View {
             // inset-grouped style is exactly the look this screen was imitating
             // by hand.
             List {
+                crest
+                    .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 10, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
                 if !overdue.isEmpty {
                     Section("Now") { rows(overdue, dismissable: true) }
                 }
@@ -139,6 +144,54 @@ struct HomeView: View {
             if let showing = firing, showing.status != .pending { firing = nil }
             Task { await coordinator.resync(context: context) }
         }
+    }
+
+    /// The bird, the level, and how far through it you are.
+    ///
+    /// Sits above the list rather than in the navigation bar so it has room to
+    /// mean something. It reacts to state you caused: upright on a streak,
+    /// slumped after a recent miss, beak open when something is due right now.
+    private var crest: some View {
+        let earned = PointsService.allTime(habits)
+        let level = Level.current(for: earned)
+        let progress = Level.progress(for: earned)
+
+        return HStack(spacing: Theme.Space.m) {
+            MascotView(
+                mood: MascotMood.current(habits: habits, occurrences: occurrences, now: clock),
+                size: 46
+            )
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Text(level.name)
+                        .font(Theme.title(17))
+                        .foregroundStyle(Theme.Palette.ink)
+                    Text("\(earned)")
+                        .font(Theme.caption(13).monospacedDigit())
+                        .foregroundStyle(Theme.Palette.inkSoft)
+                }
+
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Theme.Palette.well)
+                        Capsule()
+                            .fill(Theme.Palette.ink)
+                            .frame(width: max(geometry.size.width * progress, progress > 0 ? 6 : 0))
+                    }
+                }
+                .frame(height: 5)
+
+                if let remaining = Level.pointsToNext(from: earned),
+                   let next = Level.next(after: level) {
+                    Text("\(remaining) to \(next.name)")
+                        .font(Theme.caption(11))
+                        .foregroundStyle(Theme.Palette.inkFaint)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .animation(Theme.motion, value: earned)
     }
 
     @ViewBuilder

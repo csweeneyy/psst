@@ -34,9 +34,52 @@ nonisolated public enum AlarmService {
         }
     }
 
+    /// One-off alarms this service did not schedule: previews, snoozes, moved
+    /// nudges. Recorded so a resync cannot destroy them.
+    ///
+    /// Lives in the app group so the widget extension's intents see the same
+    /// list as the app.
+    private static let oneOffKey = "psst.oneOffAlarms"
+
+    private static var defaults: UserDefaults {
+        UserDefaults(suiteName: PsstStore.appGroup) ?? .standard
+    }
+
+    private static var oneOffIDs: Set<UUID> {
+        get {
+            Set((defaults.array(forKey: oneOffKey) as? [String] ?? []).compactMap(UUID.init))
+        }
+        set {
+            defaults.set(newValue.map(\.uuidString), forKey: oneOffKey)
+        }
+    }
+
+    /// Cancels only the recurring alarms this service owns.
+    ///
+    /// The previous version cancelled every alarm on the device belonging to
+    /// the app. A resync runs immediately after a preview, so the preview's
+    /// alarm was scheduled and then destroyed a second later, which looked
+    /// exactly like the alarm never firing.
+    static func cancelManaged() {
+        guard let alarms = try? AlarmManager.shared.alarms else { return }
+        let protected = oneOffIDs
+        var stillPending: Set<UUID> = []
+        for alarm in alarms {
+            if protected.contains(alarm.id) {
+                stillPending.insert(alarm.id)
+                continue
+            }
+            try? AlarmManager.shared.cancel(id: alarm.id)
+        }
+        // Anything the system has already fired and dropped is no longer ours
+        // to protect.
+        oneOffIDs = stillPending
+    }
+
     static func cancelAll() {
         guard let alarms = try? AlarmManager.shared.alarms else { return }
         for alarm in alarms { try? AlarmManager.shared.cancel(id: alarm.id) }
+        oneOffIDs = []
     }
 
     /// One alarm per distinct clock time per habit, recurring on the habit's
@@ -53,7 +96,7 @@ nonisolated public enum AlarmService {
         calendar: Calendar = .current
     ) async -> Result<Int, ServiceError> {
         guard authorization == .authorized else { return .failure(.notAuthorized) }
-        cancelAll()
+        cancelManaged()
 
         var plannedMinutes: [UUID: Set<Int>] = [:]
         for nudge in plan.alarms {
@@ -133,12 +176,17 @@ nonisolated public enum AlarmService {
             secondaryIntent: SnoozeHabitIntent(habitID: habit.id, occurrenceID: occurrenceID),
             sound: .default
         )
+        let id = UUID()
+        oneOffIDs.insert(id)
         do {
-            _ = try await AlarmManager.shared.schedule(id: UUID(), configuration: configuration)
+            _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
+            psstLog.notice("one-off alarm \(id.uuidString, privacy: .public) at \(fireAt, privacy: .public)")
             return .success(())
         } catch AlarmManager.AlarmError.maximumLimitReached {
+            oneOffIDs.remove(id)
             return .failure(.limitReached)
         } catch {
+            oneOffIDs.remove(id)
             return .failure(.underlying(error))
         }
     }

@@ -26,10 +26,15 @@ nonisolated public enum LiveActivityService {
     /// Apple deliberately does not publish the concurrent-activity limit, so a
     /// refusal here is expected rather than exceptional. The caller degrades
     /// the refused nudges to plain notifications.
+    /// - Parameter protected: occurrences delivered outside the plan, whose
+    ///   cards this sync does not own and must not end. A preview schedules
+    ///   one and a resync follows a second later; without this the card was
+    ///   cancelled before it ever appeared.
     static func sync(
         _ nudges: [PlannedNudge],
         habits: [UUID: Habit],
-        occurrenceIDs: [PlannedNudge: UUID]
+        occurrenceIDs: [PlannedNudge: UUID],
+        protected: Set<UUID> = []
     ) async -> Result<[PlannedNudge], ServiceError> {
         guard isAvailable else {
             psstLog.error("live activities are disabled for this app in Settings")
@@ -41,6 +46,10 @@ nonisolated public enum LiveActivityService {
         // at it, which is exactly the moment the app is supposed to be useful.
         var alive: Set<UUID> = []
         for activity in NudgeActivity.all() {
+            if protected.contains(activity.attributes.occurrenceID) {
+                alive.insert(activity.attributes.occurrenceID)
+                continue
+            }
             switch activity.activityState {
             case .active, .stale:
                 alive.insert(activity.attributes.occurrenceID)

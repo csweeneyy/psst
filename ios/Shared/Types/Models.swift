@@ -146,9 +146,11 @@ public final class ChatMessage {
 }
 
 public enum PsstStore {
-    public static let appGroup = "group.com.connorsweeney.Psst"
+    /// Plain data, so non-isolated code (alarm bookkeeping, the widget) can
+    /// reach it without hopping to the main actor.
+    nonisolated public static let appGroup = "group.com.connorsweeney.Psst"
 
-    public static let schema = Schema([Habit.self, HabitOccurrence.self, ChatMessage.self])
+    nonisolated public static let schema = Schema([Habit.self, HabitOccurrence.self, ChatMessage.self])
 
     /// True when `shared` is a throwaway store rather than the real one.
     ///

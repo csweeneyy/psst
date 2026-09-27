@@ -84,7 +84,17 @@ final class NudgeCoordinator {
 
         var notificationNudges = plan.notifications
 
-        switch await LiveActivityService.sync(plan.liveActivities, habits: byID, occurrenceIDs: occurrenceIDs) {
+        // Cards for nudges delivered outside the plan are not this sync's to
+        // cancel.
+        let protected = Set(
+            ((try? context.fetch(FetchDescriptor<HabitOccurrence>())) ?? [])
+                .filter { $0.deliveryScheduled && $0.status == .pending }
+                .map(\.id)
+        )
+
+        switch await LiveActivityService.sync(
+            plan.liveActivities, habits: byID, occurrenceIDs: occurrenceIDs, protected: protected
+        ) {
         case .success(let started):
             scheduledLiveActivities = started.count
             // Anything ActivityKit refused still has to reach the user.
@@ -112,7 +122,7 @@ final class NudgeCoordinator {
             case .failure(.underlying(let error)): lastError = error.localizedDescription
             }
         } else {
-            AlarmService.cancelAll()
+            AlarmService.cancelManaged()
             scheduledAlarms = 0
         }
 

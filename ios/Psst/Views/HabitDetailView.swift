@@ -260,9 +260,18 @@ struct HabitDetailView: View {
                         .foregroundStyle(Theme.Palette.ink)
                     Spacer()
                     if let previewAt {
-                        Text(previewAt, style: .relative)
-                            .font(Theme.footnote(13).monospacedDigit())
-                            .foregroundStyle(Theme.Palette.inkSoft)
+                        // A plain relative style keeps counting once the date
+                        // passes, so a fired nudge read as "1 min ago" and
+                        // looked like it was still waiting. Count down, then
+                        // stop.
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            let remaining = Int(previewAt.timeIntervalSince(context.date).rounded(.up))
+                            Text(remaining > 0 ? "in \(remaining)s" : "sent")
+                                .font(Theme.footnote(13).monospacedDigit())
+                                .foregroundStyle(
+                                    remaining > 0 ? Theme.Palette.inkSoft : Theme.Palette.success
+                                )
+                        }
                     }
                 }
             }
