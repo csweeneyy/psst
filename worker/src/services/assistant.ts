@@ -19,11 +19,43 @@ export interface ConverseResult extends ChatResponse {
 }
 
 /**
+ * Ceiling on one upstream call from a model that still has a successor. Taking
+ * the next model costs less than waiting: measured 2026-09-27, the primary
+ * answers a single pass in 2.5 to 4.1 seconds, so 12s is three times its
+ * ordinary worst case and only a genuinely stuck upstream reaches it.
+ */
+const FAILOVER_MS = 12_000;
+
+/**
+ * Ceiling on the whole turn: both passes, every fallback. The app gives up at
+ * 45s (AssistantService.swift), so an answer that arrives later is a failure
+ * with extra steps. The last model in the chain gets whatever is left of this
+ * rather than a 12s leash, because there is nothing to fail over to.
+ */
+const TURN_MS = 38_000;
+
+interface Budget {
+  /** Wall clock the whole turn must be done by. */
+  deadline: number;
+  /** Most any single call may take, even with budget to spare. */
+  cap: number;
+}
+
+/** What this call gets: the smaller of its own cap and what the turn has left. */
+function leash(budget: Budget): number {
+  return Math.min(budget.cap, budget.deadline - Date.now());
+}
+
+/**
  * Runs the configured model chain until one produces a usable answer.
  *
  * Escalation is driven by observed failure, not by predicting difficulty. A
  * cheap model gets every request first; it only loses the turn if it actually
  * breaks, which is the only signal that generalizes across providers.
+ *
+ * Taking too long counts as breaking. Without a deadline one stuck upstream
+ * holds the whole turn until the app gives up, and the user gets nothing at
+ * all rather than a slightly worse answer from the next model.
  */
 export async function converse(
   env: Env,
@@ -43,8 +75,18 @@ export async function converse(
   const attempts: Attempt[] = [];
   let lastError = "No model was attempted.";
 
-  for (const route of chain) {
-    const outcome = await attempt(env, request, route);
+  const deadline = Date.now() + TURN_MS;
+
+  for (const [index, route] of chain.entries()) {
+    // Nothing to fall back to, so the last model gets the rest of the turn.
+    const last = index === chain.length - 1;
+    const budget: Budget = { deadline, cap: last ? TURN_MS : FAILOVER_MS };
+    if (leash(budget) <= 0) {
+      lastError = `out of time after ${attempts.length} of ${chain.length} models`;
+      break;
+    }
+
+    const outcome = await attempt(env, request, route, budget);
     if (outcome.ok) {
       attempts.push({ model: route.model, provider: route.provider.id, ok: true });
       return { ok: true, value: { ...outcome.value, servedBy: label(route), attempts } };
@@ -66,7 +108,12 @@ type AttemptResult =
   | { ok: true; value: Omit<ConverseResult, "servedBy" | "attempts"> }
   | { ok: false; error: string; retryable: boolean };
 
-async function attempt(env: Env, request: ChatRequest, route: Route): Promise<AttemptResult> {
+async function attempt(
+  env: Env,
+  request: ChatRequest,
+  route: Route,
+  budget: Budget,
+): Promise<AttemptResult> {
   const system = systemPrompt(request);
   const messages: Msg[] = [
     ...request.history.map<Msg>((turn) =>
@@ -84,6 +131,7 @@ async function attempt(env: Env, request: ChatRequest, route: Route): Promise<At
     messages,
     tools,
     maxTokens: 1500,
+    timeoutMs: leash(budget),
   });
   if (!first.ok) return first;
 
@@ -166,8 +214,24 @@ async function attempt(env: Env, request: ChatRequest, route: Route): Promise<At
     messages,
     tools,
     maxTokens: 1500,
+    timeoutMs: leash(budget),
   });
-  if (!second.ok) return second;
+
+  // The change is already decided and validated; this pass only writes the
+  // sentence about it. Losing that sentence is not worth spending the rest of
+  // the turn making another model redo work that is already done.
+  if (!second.ok) {
+    return {
+      ok: true,
+      value: {
+        reply: fallbackReply(mutations),
+        mutations,
+        warnings: failures,
+        inputTokens,
+        outputTokens,
+      },
+    };
+  }
 
   inputTokens += second.value.inputTokens;
   outputTokens += second.value.outputTokens;

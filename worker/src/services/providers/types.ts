@@ -37,6 +37,12 @@ export interface CompleteOptions {
   messages: Msg[];
   tools: ToolSpec[];
   maxTokens: number;
+  /**
+   * Hard deadline for this one call. A model that has not answered by then is
+   * aborted and reported as a retryable failure, because a hung upstream is
+   * indistinguishable from a dead one and the caller is waiting either way.
+   */
+  timeoutMs: number;
 }
 
 export type Completion =

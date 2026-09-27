@@ -16,10 +16,13 @@ export const anthropic: Provider = {
   keyName: "ANTHROPIC_API_KEY",
 
   async complete(options: CompleteOptions): Promise<Completion> {
-    let response: Response;
+    const deadline = new AbortController();
+    const expiry = setTimeout(() => deadline.abort(), options.timeoutMs);
+
     try {
-      response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
+        signal: deadline.signal,
         headers: {
           "content-type": "application/json",
           "x-api-key": options.apiKey,
@@ -37,38 +40,43 @@ export const anthropic: Provider = {
           messages: options.messages.map(toAnthropic),
         }),
       });
-    } catch (cause) {
-      return { ok: false, error: `anthropic unreachable: ${String(cause)}`, retryable: true };
-    }
 
-    const body = (await response.json()) as {
-      content?: Block[];
-      usage?: { input_tokens?: number; output_tokens?: number };
-      error?: { message?: string };
-    };
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: body.error?.message ?? `anthropic returned ${response.status}`,
-        // 4xx other than rate limiting is our bug, not a reason to try a
-        // different model with the same malformed request.
-        retryable: response.status === 429 || response.status >= 500,
+      const body = (await response.json()) as {
+        content?: Block[];
+        usage?: { input_tokens?: number; output_tokens?: number };
+        error?: { message?: string };
       };
-    }
 
-    const blocks = body.content ?? [];
-    return {
-      ok: true,
-      value: {
-        text: blocks.filter((b) => b.type === "text").map((b) => b.text ?? "").join("\n").trim(),
-        toolCalls: blocks
-          .filter((b) => b.type === "tool_use")
-          .map<ToolCall>((b) => ({ id: b.id ?? "", name: b.name ?? "", input: b.input ?? {} })),
-        inputTokens: body.usage?.input_tokens ?? 0,
-        outputTokens: body.usage?.output_tokens ?? 0,
-      },
-    };
+      if (!response.ok) {
+        return {
+          ok: false,
+          error: body.error?.message ?? `anthropic returned ${response.status}`,
+          // 4xx other than rate limiting is our bug, not a reason to try a
+          // different model with the same malformed request.
+          retryable: response.status === 429 || response.status >= 500,
+        };
+      }
+
+      const blocks = body.content ?? [];
+      return {
+        ok: true,
+        value: {
+          text: blocks.filter((b) => b.type === "text").map((b) => b.text ?? "").join("\n").trim(),
+          toolCalls: blocks
+            .filter((b) => b.type === "tool_use")
+            .map<ToolCall>((b) => ({ id: b.id ?? "", name: b.name ?? "", input: b.input ?? {} })),
+          inputTokens: body.usage?.input_tokens ?? 0,
+          outputTokens: body.usage?.output_tokens ?? 0,
+        },
+      };
+    } catch (cause) {
+      // An abort arrives here as a thrown DOMException, not as a response.
+      return deadline.signal.aborted
+        ? { ok: false, error: `anthropic passed its ${options.timeoutMs}ms deadline`, retryable: true }
+        : { ok: false, error: `anthropic unreachable: ${String(cause)}`, retryable: true };
+    } finally {
+      clearTimeout(expiry);
+    }
   },
 };
 

@@ -398,12 +398,17 @@ struct ChatView: View {
             )
         }
 
+        let began = Date.now
+        psstLog.notice("chat: sending, \(snapshots.count) habits, \(history.count) turns")
+
         var reply: AssistantReply
         switch await AssistantService.send(text, habits: snapshots, history: history) {
         case .failure(let error):
+            psstLog.error("chat: failed after \(Date.now.timeIntervalSince(began))s: \(error.localizedDescription)")
             failure = error.errorDescription
             return
         case .success(let first):
+            psstLog.notice("chat: first pass in \(Date.now.timeIntervalSince(began))s, dataRequest=\(first.dataRequest != nil)")
             reply = first
         }
 
@@ -423,6 +428,7 @@ struct ChatView: View {
         }
 
         await applyReply(reply)
+        psstLog.notice("chat: done in \(Date.now.timeIntervalSince(began))s")
     }
 
     /// Day-level detail for whatever range the assistant asked about.

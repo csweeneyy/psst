@@ -8,20 +8,25 @@ database_name = "psst"
 database_id = "4ccf990d-6ff5-4b54-9923-0b4f8118fd16"
 
 [vars]
-# Chosen by `bun run eval`, 2026-09-26. All three score 15/15; the order is
-# cheapest first, and a model only loses a turn when it observably fails.
+# Ordered by `bun run eval`, re-measured 2026-09-27 against the deployed Worker.
+# Both entries score 20/20; the order is fastest first, and a model only loses
+# a turn when it observably fails or passes its deadline.
 #
-#   deepseek-v4-flash-0731  15/15  median 6.8s   $0.021 / $0.320   <- primary
-#   deepseek-v4.1-flash     15/15  median 8.4s   $0.035 / $0.290
-#   deepseek-v4-pro         15/15  median 8.6s   $0.348 / $0.696   <- last resort
-#   glm-5.3-flash           14/15  median 13.7s  $0.040 / $0.500
-#   gpt-oss-120b            13/15  median 6.0s   $0.150 / $0.600   <- rejected
+#   deepseek-v4.1-flash     20/20  one pass 2.5-4.1s   tool turn 4.2-5.0s    <- primary
+#   deepseek-v4-pro         20/20  one pass 18-28s     tool turn 15-17s      <- last resort
 #
-# gpt-oss-120b failed two cases that matter: it edited only one habit when the
-# user named two, and it changed a setting when the right answer was to ask a
-# question. Both are the kind of failure you would not notice until it had
-# quietly rewritten a schedule.
-MODEL_CHAIN = "openrouter:deepseek/deepseek-v4-flash-0731,openrouter:deepseek/deepseek-v4.1-flash,openrouter:deepseek/deepseek-v4-pro"
+# deepseek-v4-flash-0731 was the primary until it stopped being fast. On the
+# identical prompt (5.1k input tokens both) it now answers one pass in 9.7 to
+# 21.5s against 2.5 to 4.1s for v4.1-flash, and a two-call tool turn in 29 to
+# 32s against 4.2 to 5.0s: roughly 25 tokens/sec against 97. It is not wrong,
+# only slow, and slowness never triggered escalation, so every request paid it.
+# Dropped rather than demoted: at 30s a turn it cannot finish inside the 12s
+# failover leash, so keeping it anywhere in the chain only burns the leash.
+#
+# glm-5.3-flash and gpt-oss-120b stay rejected on accuracy, not speed:
+# gpt-oss-120b edited one habit when the user named two, and changed a setting
+# where the right answer was to ask a question.
+MODEL_CHAIN = "openrouter:deepseek/deepseek-v4.1-flash,openrouter:deepseek/deepseek-v4-pro"
 
 # Secrets, one per provider you actually use:
 #   wrangler secret put OPENROUTER_API_KEY

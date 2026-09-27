@@ -16,10 +16,13 @@ export function openAICompatible(
     keyName,
 
     async complete(options: CompleteOptions): Promise<Completion> {
-      let response: Response;
+      const deadline = new AbortController();
+      const expiry = setTimeout(() => deadline.abort(), options.timeoutMs);
+
       try {
-        response = await fetch(`${baseURL}/chat/completions`, {
+        const response = await fetch(`${baseURL}/chat/completions`, {
           method: "POST",
+          signal: deadline.signal,
           headers: {
             "content-type": "application/json",
             authorization: `Bearer ${options.apiKey}`,
@@ -43,60 +46,65 @@ export function openAICompatible(
             tool_choice: "auto",
           }),
         });
-      } catch (cause) {
-        return { ok: false, error: `${id} unreachable: ${String(cause)}`, retryable: true };
-      }
 
-      const body = (await response.json()) as {
-        choices?: Array<{
-          message?: {
-            content?: string | null;
-            tool_calls?: Array<{
-              id?: string;
-              function?: { name?: string; arguments?: string };
-            }>;
-          };
-        }>;
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
-        error?: { message?: string };
-      };
-
-      if (!response.ok) {
-        return {
-          ok: false,
-          error: body.error?.message ?? `${id} returned ${response.status}`,
-          retryable: response.status === 429 || response.status >= 500,
+        const body = (await response.json()) as {
+          choices?: Array<{
+            message?: {
+              content?: string | null;
+              tool_calls?: Array<{
+                id?: string;
+                function?: { name?: string; arguments?: string };
+              }>;
+            };
+          }>;
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+          error?: { message?: string };
         };
-      }
 
-      const message = body.choices?.[0]?.message;
-      const toolCalls: ToolCall[] = [];
-      for (const call of message?.tool_calls ?? []) {
-        // Arguments arrive as a JSON *string*. Weak models frequently emit
-        // malformed JSON here, which is exactly the failure the router needs
-        // to see in order to escalate.
-        let input: Record<string, unknown>;
-        try {
-          input = JSON.parse(call.function?.arguments || "{}") as Record<string, unknown>;
-        } catch {
+        if (!response.ok) {
           return {
             ok: false,
-            error: `${id} emitted unparseable tool arguments`,
-            retryable: true,
+            error: body.error?.message ?? `${id} returned ${response.status}`,
+            retryable: response.status === 429 || response.status >= 500,
           };
         }
-        toolCalls.push({ id: call.id ?? "", name: call.function?.name ?? "", input });
-      }
 
-      return {
-        ok: true,
-        value: {
-          text: (message?.content ?? "").trim(),
-          toolCalls,
-          inputTokens: body.usage?.prompt_tokens ?? 0,
-          outputTokens: body.usage?.completion_tokens ?? 0,
-        },
-      };
+        const message = body.choices?.[0]?.message;
+        const toolCalls: ToolCall[] = [];
+        for (const call of message?.tool_calls ?? []) {
+          // Arguments arrive as a JSON *string*. Weak models frequently emit
+          // malformed JSON here, which is exactly the failure the router needs
+          // to see in order to escalate.
+          let input: Record<string, unknown>;
+          try {
+            input = JSON.parse(call.function?.arguments || "{}") as Record<string, unknown>;
+          } catch {
+            return {
+              ok: false,
+              error: `${id} emitted unparseable tool arguments`,
+              retryable: true,
+            };
+          }
+          toolCalls.push({ id: call.id ?? "", name: call.function?.name ?? "", input });
+        }
+
+        return {
+          ok: true,
+          value: {
+            text: (message?.content ?? "").trim(),
+            toolCalls,
+            inputTokens: body.usage?.prompt_tokens ?? 0,
+            outputTokens: body.usage?.completion_tokens ?? 0,
+          },
+        };
+      } catch (cause) {
+        // An abort arrives here as a thrown DOMException, not as a response.
+        return deadline.signal.aborted
+          ? { ok: false, error: `${id} passed its ${options.timeoutMs}ms deadline`, retryable: true }
+          : { ok: false, error: `${id} unreachable: ${String(cause)}`, retryable: true };
+      } finally {
+        clearTimeout(expiry);
+      }
     },
   };
 }
