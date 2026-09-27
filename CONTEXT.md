@@ -227,6 +227,13 @@ weekly review, and apply in one tap.
   firing, so the occurrence id inside it matches nothing. `OccurrenceMatcher`
   falls back to the habit's nearest pending nudge. Without that, the whole
   alarm tier silently recorded no completions.
+- **The app group store cannot be opened while the phone is locked.** iOS
+  launches this process in the background to run intents, and in that state
+  the container is unavailable. `PsstStore` never caches a degraded container
+  and publishes `isDegraded`; every writer checks it. A cached scratch store
+  once made every habit appear deleted.
+- Never let an empty list and a failed load look the same. Home distinguishes
+  them explicitly.
 - `resync` must purge as well as add. `SchedulingService.stale` decides what
   the new plan orphaned; skipping it leaves the old schedule's rows on Home and
   makes every habit edit look like a no-op. Regression: `ReconciliationTests`.

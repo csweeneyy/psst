@@ -146,28 +146,49 @@ public enum PsstStore {
 
     public static let schema = Schema([Habit.self, HabitOccurrence.self, ChatMessage.self])
 
-    /// Shared container so the widget extension and the app read the same rows.
+    /// True when `shared` is a throwaway store rather than the real one.
     ///
-    /// The app-group path is checked with `FileManager` first. SwiftData calls
-    /// `fatalError` (not a throw) when asked for a group container the process
-    /// is not entitled to, so `try?` alone would not save the launch. That
-    /// happens on any unsigned build, including plain `xcodebuild` runs.
-    /// Process-wide. Creating a second `ModelContainer` over the same store
-    /// is legal but the two do not share a coordinator, so a write through one
-    /// is invisible to the other until a refetch. That is what made the Live
-    /// Activity buttons look dead: the intent wrote to a private container the
-    /// running app was not observing.
-    public static let shared: ModelContainer = container()
+    /// Callers that write must check this. Saving an answer into a scratch
+    /// container looks like it worked and silently drops the data.
+    @MainActor public private(set) static var isDegraded = false
 
-    public static func container() -> ModelContainer {
-        if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) != nil {
-            let shared = ModelConfiguration(schema: schema, groupContainer: .identifier(appGroup))
-            if let container = try? ModelContainer(for: schema, configurations: shared) {
-                return container
-            }
+    @MainActor private static var cached: ModelContainer?
+
+    /// The real store, or a scratch one if it genuinely cannot be opened.
+    ///
+    /// Deliberately NOT a `static let`. The app group container is protected
+    /// by data protection: when iOS launches this process in the background to
+    /// run an intent while the phone is locked, the store cannot be opened at
+    /// all. Caching that failure for the lifetime of the process meant the
+    /// user unlocked their phone, opened the app, and found every habit gone,
+    /// while the real database sat untouched on disk.
+    ///
+    /// So a degraded container is never cached, and every access retries.
+    @MainActor public static var shared: ModelContainer {
+        if let cached { return cached }
+
+        if let real = openGroupStore() {
+            cached = real
+            isDegraded = false
+            return real
         }
-        // Process-local store. The app still works; only widget/app sharing is lost.
-        if let local = try? ModelContainer(for: schema) { return local }
+
+        isDegraded = true
+        psstLog.error("app group store unavailable; running on a scratch container")
+        // Not cached: the next access, once the device is unlocked, gets the
+        // real thing.
+        return scratch()
+    }
+
+    private static func openGroupStore() -> ModelContainer? {
+        guard FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroup) != nil
+        else { return nil }
+        let configuration = ModelConfiguration(schema: schema, groupContainer: .identifier(appGroup))
+        return try? ModelContainer(for: schema, configurations: configuration)
+    }
+
+    private static func scratch() -> ModelContainer {
         let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: memory)
     }

@@ -58,7 +58,14 @@ struct HomeView: View {
                 if !logged.isEmpty {
                     Section("Logged") { rows(logged, dismissable: true) }
                 }
-                if habits.isEmpty {
+                if let problem = coordinator.lastError {
+                    // An empty list and a failed load look identical, and one
+                    // of them is alarming. Say which it is.
+                    Label(problem, systemImage: "exclamationmark.triangle.fill")
+                        .font(Theme.footnote(14))
+                        .foregroundStyle(Theme.Palette.warning)
+                        .listRowBackground(Theme.Palette.surface)
+                } else if habits.isEmpty {
                     EmptyStateView(
                         symbol: "bell.slash",
                         title: "No habits yet",

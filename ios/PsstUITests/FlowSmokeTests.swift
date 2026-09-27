@@ -7,8 +7,10 @@ nonisolated final class FlowSmokeTests: XCTestCase {
 
     private func launch(onboarded: Bool = true) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchEnvironment["PSST_SEED"] = "1"
         if onboarded {
+            // Seeding here would defeat the point of the onboarding test:
+            // existing habits deliberately skip first run.
+            app.launchEnvironment["PSST_SEED"] = "1"
             app.launchArguments += ["-hasOnboarded", "YES"]
         }
         app.launch()

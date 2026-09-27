@@ -51,6 +51,7 @@ nonisolated public enum NudgeQueue {
         container: ModelContainer = PsstStore.shared,
         center: UNUserNotificationCenter = .current()
     ) async -> UUID? {
+        guard PsstStore.isDegraded == false else { return nil }
         let context = container.mainContext
         guard let follower = next(after: occurrenceID, context: context),
               let habit = follower.habit else { return nil }

@@ -44,6 +44,7 @@ nonisolated public struct WidgetSnapshot: Sendable, Equatable {
         now: Date = .now,
         calendar: Calendar = .current
     ) -> WidgetSnapshot {
+        guard PsstStore.isDegraded == false else { return .empty }
         let context = container.mainContext
         let all = (try? context.fetch(FetchDescriptor<HabitOccurrence>())) ?? []
         let today = all.filter { calendar.isDateInToday($0.scheduledAt) && $0.habit != nil }

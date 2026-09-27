@@ -33,6 +33,10 @@ nonisolated public enum FollowUp {
         now: Date = .now,
         center: UNUserNotificationCenter = .current()
     ) async -> Date? {
+        guard PsstStore.isDegraded == false else {
+            psstLog.error("refusing to snooze against a scratch store")
+            return nil
+        }
         let context = container.mainContext
         let descriptor = FetchDescriptor<HabitOccurrence>(
             predicate: #Predicate { $0.id == occurrenceID }

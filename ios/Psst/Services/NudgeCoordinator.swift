@@ -43,6 +43,14 @@ final class NudgeCoordinator {
         }
         psstLog.notice("resync started")
 
+        // A scratch store has no habits, so a resync would happily conclude
+        // there is nothing to schedule and cancel everything real.
+        guard PsstStore.isDegraded == false else {
+            psstLog.error("skipping resync: store is unavailable")
+            lastError = "Could not open your data. Unlock your phone and reopen Psst."
+            return
+        }
+
         let habits = (try? context.fetch(FetchDescriptor<Habit>())) ?? []
         let byID = Dictionary(uniqueKeysWithValues: habits.map { ($0.id, $0) })
 

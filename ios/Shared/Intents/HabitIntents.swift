@@ -114,6 +114,13 @@ public enum OccurrenceWriter {
         as status: OccurrenceStatus,
         now: Date = .now
     ) -> UUID? {
+        guard PsstStore.isDegraded == false else {
+            // Locked device, group store unreadable. Writing here would look
+            // like success and drop the answer. The nudge stays pending and
+            // gets answered again rather than being silently lost.
+            psstLog.error("refusing to record an answer against a scratch store")
+            return nil
+        }
         let context = PsstStore.shared.mainContext
         guard let occurrence = OccurrenceMatcher.match(
             occurrenceID: occurrenceID, habitID: habitID, in: context, now: now

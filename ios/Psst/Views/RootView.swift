@@ -13,6 +13,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(NotificationResponder.self) private var responder
     @AppStorage("hasOnboarded") private var hasOnboarded = false
+    @Query private var habits: [Habit]
     @State private var screen = Screen.home
 
     enum Screen: Int, Hashable, CaseIterable {
@@ -20,7 +21,10 @@ struct RootView: View {
     }
 
     var body: some View {
-        if hasOnboarded {
+        // Existing data outranks the flag. A reinstall, or a preferences file
+        // that did not survive, must never put a real user behind a first-run
+        // screen that makes their app look empty.
+        if hasOnboarded || !habits.isEmpty {
             tabs
         } else {
             OnboardingView().transition(.opacity)
