@@ -27,9 +27,16 @@ targets:
     dependencies:
       - target: PsstWidgets
         embed: true
+      - target: PsstMonitor
+        embed: true
+      - target: PsstShield
+        embed: true
+      - target: PsstShieldAction
+        embed: true
     entitlements:
       path: Psst/Psst.entitlements
       properties:
+        com.apple.developer.family-controls: true
         com.apple.security.application-groups:
           - group.com.connorsweeney.Psst
     info:
@@ -81,6 +88,93 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.connorsweeney.Psst.Widgets
         TARGETED_DEVICE_FAMILY: "1"
 
+  PsstMonitor:
+    type: app-extension
+    platform: iOS
+    # Only the two files it needs. These extensions run under a tight memory
+    # ceiling, and a shield extension that is slow to answer is replaced by the
+    # system's own generic blocker, so compiling the whole app model layer in
+    # here would be paid for on screen.
+    sources:
+      - path: Shared/Types/Lockdown.swift
+      - path: Shared/Services/LockdownService.swift
+      - path: PsstMonitor
+    entitlements:
+      path: PsstMonitor/PsstMonitor.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups:
+          - group.com.connorsweeney.Psst
+    info:
+      path: PsstMonitor/Info.plist
+      properties:
+        CFBundleDisplayName: Psst
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.deviceactivity.monitor-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MonitorExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.connorsweeney.Psst.Monitor
+        TARGETED_DEVICE_FAMILY: "1"
+
+  PsstShield:
+    type: app-extension
+    platform: iOS
+    # Only the two files it needs. These extensions run under a tight memory
+    # ceiling, and a shield extension that is slow to answer is replaced by the
+    # system's own generic blocker, so compiling the whole app model layer in
+    # here would be paid for on screen.
+    sources:
+      - path: Shared/Types/Lockdown.swift
+      - path: Shared/Services/LockdownService.swift
+      - path: PsstShield
+    entitlements:
+      path: PsstShield/PsstShield.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups:
+          - group.com.connorsweeney.Psst
+    info:
+      path: PsstShield/Info.plist
+      properties:
+        CFBundleDisplayName: Psst
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.ManagedSettingsUI.shield-configuration-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldConfigurationExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.connorsweeney.Psst.Shield
+        TARGETED_DEVICE_FAMILY: "1"
+
+  PsstShieldAction:
+    type: app-extension
+    platform: iOS
+    # Only the two files it needs. These extensions run under a tight memory
+    # ceiling, and a shield extension that is slow to answer is replaced by the
+    # system's own generic blocker, so compiling the whole app model layer in
+    # here would be paid for on screen.
+    sources:
+      - path: Shared/Types/Lockdown.swift
+      - path: Shared/Services/LockdownService.swift
+      - path: PsstShieldAction
+    entitlements:
+      path: PsstShieldAction/PsstShieldAction.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups:
+          - group.com.connorsweeney.Psst
+    info:
+      path: PsstShieldAction/Info.plist
+      properties:
+        CFBundleDisplayName: Psst
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.ManagedSettings.shield-action-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldActionExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.connorsweeney.Psst.ShieldAction
+        TARGETED_DEVICE_FAMILY: "1"
+
   PsstUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -116,6 +210,9 @@ schemes:
       targets:
         Psst: all
         PsstWidgets: all
+        PsstMonitor: all
+        PsstShield: all
+        PsstShieldAction: all
     run:
       config: Debug
     test:

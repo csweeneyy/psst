@@ -49,11 +49,36 @@ struct ChatView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            transcript
+        // As a tab this has to be a real navigation stack, not a hand-rolled
+        // header. A `Text` styled to look like a large title is never quite
+        // the same size or at the same height as the genuine article, which is
+        // why this page sat higher and in a smaller font than Home and Habits.
+        Group {
+            if embedded {
+                NavigationStack {
+                    transcript
+                        .background(Theme.Palette.canvas)
+                        .navigationTitle("Psst")
+                        .toolbarTitleDisplayMode(.large)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button { showHistory = true } label: {
+                                    Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                                        .foregroundStyle(Theme.Palette.ink)
+                                }
+                                .accessibilityLabel("Past conversations")
+                            }
+                        }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    header
+                    transcript
+                }
+            }
         }
         .background(Theme.Palette.canvas)
+        .sheet(isPresented: $showHistory) { ChatHistoryView() }
         // `safeAreaInset` is what makes the composer track the keyboard
         // correctly. As a plain sibling in a VStack it kept its original
         // height when the keyboard grew, which is how the emoji keyboard
@@ -131,7 +156,6 @@ struct ChatView: View {
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.l)
         .padding(.bottom, Theme.Space.s)
-        .sheet(isPresented: $showHistory) { ChatHistoryView() }
     }
 
     @ViewBuilder
@@ -201,62 +225,108 @@ struct ChatView: View {
         return lines
     }
 
+    /// The composer.
+    ///
+    /// One capsule with one button on its right, which is the mic until you
+    /// have typed something and the send once you have. Dictation replaces the
+    /// field with a live waveform driven by real microphone loudness rather
+    /// than an animation, and the words appear above it as they are heard, so
+    /// you can see it working without watching a text field twitch.
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: Theme.Space.s) {
-            Button { Task { await toggleDictation() } } label: {
-                Image(systemName: speech.isRecording ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 19, weight: .medium))
-                    .foregroundStyle(speech.isRecording ? .white : Theme.Palette.ink)
-                    .frame(width: 48, height: 48)
-                    .background(
-                        Circle().fill(
-                            speech.isRecording ? Theme.Palette.alarm : Theme.Palette.surface
-                        )
-                    )
-                    .overlay(
-                        Circle().strokeBorder(
-                            speech.isRecording ? .clear : Theme.Palette.hairline, lineWidth: 0.5
-                        )
-                    )
-                    .contentShape(Circle())
+        VStack(spacing: 8) {
+            if speech.isRecording, !liveText.isEmpty {
+                Text(liveText)
+                    .font(Theme.body(15))
+                    .foregroundStyle(Theme.Palette.inkSoft)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
-            .buttonStyle(.plain)
-            .animation(Theme.fast, value: speech.isRecording)
 
-            TextField(
-                speech.isRecording ? "Listening" : "Message",
-                // While dictating the field shows what you already had plus
-                // what is being heard, so nothing appears to vanish.
-                text: speech.isRecording ? .constant(liveText) : $draft,
-                axis: .vertical
-            )
-            .font(Theme.body(16))
-            .foregroundStyle(Theme.Palette.ink)
-            .tint(Theme.Palette.ink)
-            .focused($focused)
-            .lineLimit(1...5)
-            .submitLabel(.send)
-            .padding(.horizontal, Theme.Space.m)
-            .padding(.vertical, 9)
-            .background(Capsule().fill(Theme.Palette.surface))
-            .overlay(Capsule().strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
-            .disabled(speech.isRecording)
+            HStack(alignment: .bottom, spacing: Theme.Space.s) {
+                Group {
+                    if speech.isRecording {
+                        waveform
+                    } else {
+                        TextField("Message", text: $draft, axis: .vertical)
+                            .font(Theme.body(16))
+                            .foregroundStyle(Theme.Palette.ink)
+                            .tint(Theme.Palette.ink)
+                            .focused($focused)
+                            .lineLimit(1...5)
+                            .padding(.horizontal, Theme.Space.m)
+                            .padding(.vertical, 9)
+                    }
+                }
+                .frame(minHeight: 38)
+                .background(Capsule().fill(Theme.Palette.surface))
+                .overlay(Capsule().strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
 
-            Button { Task { await send() } } label: {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.Palette.onAccent)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(canSend ? Theme.Palette.accent : Theme.Palette.inkFaint))
-                    .contentShape(Circle())
+                composerButton
             }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
-            .animation(Theme.fast, value: canSend)
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.vertical, Theme.Space.m)
         .background(Theme.Palette.canvas)
+        .animation(Theme.fast, value: speech.isRecording)
+        .animation(Theme.fast, value: canSend)
+    }
+
+    /// Live microphone loudness. Bars are seeded at a hairline so an empty
+    /// waveform still reads as a waveform rather than a blank pill.
+    private var waveform: some View {
+        HStack(alignment: .center, spacing: 3) {
+            ForEach(Array(speech.levels.enumerated()), id: \.offset) { _, level in
+                Capsule()
+                    .fill(Theme.Palette.ink)
+                    .frame(width: 3, height: max(CGFloat(level) * 22, 3))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 38)
+        .animation(.linear(duration: 0.08), value: speech.levels)
+        .accessibilityLabel("Listening")
+    }
+
+    /// Mic, then send. One button, because two beside a field is one too many
+    /// and only ever one of them is the thing you mean.
+    @ViewBuilder
+    private var composerButton: some View {
+        if speech.isRecording {
+            Button { Task { await toggleDictation() } } label: {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Theme.Palette.onAccent)
+                    .frame(width: 13, height: 13)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(Theme.Palette.alarm))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Stop dictating")
+        } else if canSend {
+            Button { Task { await send() } } label: {
+                Image(systemName: "paperplane.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.onAccent)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(Theme.Palette.accent))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Send")
+        } else {
+            Button { Task { await toggleDictation() } } label: {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Theme.Palette.ink)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(Theme.Palette.surface))
+                    .overlay(Circle().strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dictate")
+        }
     }
 
     /// Existing text plus the live transcript.

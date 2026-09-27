@@ -126,11 +126,64 @@ final class NudgeCoordinator {
             scheduledAlarms = 0
         }
 
+        syncLockdown(habits, plan: plan, now: now)
+
         WidgetSnapshot.reload()
         lastSync = now
         psstLog.notice(
             "resync: \(self.scheduledNotifications) notifications, \(self.scheduledLiveActivities) activities, \(self.scheduledAlarms) alarms"
         )
+    }
+
+    /// Keeps the shield windows in step with the habits.
+    ///
+    /// A `DeviceActivitySchedule` repeats daily from a wall-clock time, so a
+    /// habit that fires at several times a day gets shielded at the first of
+    /// them. That is the honest reading of "lock me out until this is done":
+    /// the lockdown is for the one appointment you keep skipping, not for
+    /// every reminder in the day.
+    private func syncLockdown(_ habits: [Habit], plan: NudgePlan, now: Date) {
+        guard LockdownService.isAuthorized else { return }
+
+        let calendar = Calendar.current
+        let inputs: [(id: UUID, name: String, minute: Int, enabled: Bool)] = habits.map { habit in
+            let firstToday = plan.all
+                .filter { $0.habitID == habit.id }
+                .map(\.fireAt)
+                .min()
+            let date = firstToday ?? now
+            let parts = calendar.dateComponents([.hour, .minute], from: date)
+            return (
+                habit.id,
+                habit.name,
+                (parts.hour ?? 0) * 60 + (parts.minute ?? 0),
+                habit.lockdownEnabled && !habit.isPaused && habit.intensity == .alarm
+            )
+        }
+        LockdownService.sync(inputs)
+    }
+
+    /// Habits the shield screen marked done while the app was not running.
+    ///
+    /// The shield extension cannot reach SwiftData, so it leaves ids in the
+    /// shared defaults and the app settles up on its next foreground. Without
+    /// this the phone unlocks but the habit still reads as missed, which is
+    /// the worst of both.
+    func drainLockdownCompletions(context: ModelContext, now: Date = .now) {
+        let completed = Lockdown.drainCompletions()
+        guard !completed.isEmpty else { return }
+
+        let occurrences = (try? context.fetch(FetchDescriptor<HabitOccurrence>())) ?? []
+        for habitID in completed {
+            let candidate = occurrences
+                .filter { $0.habit?.id == habitID && $0.status == .pending }
+                .min { abs($0.scheduledAt.timeIntervalSince(now)) < abs($1.scheduledAt.timeIntervalSince(now)) }
+            guard let candidate else { continue }
+            candidate.statusRaw = OccurrenceStatus.completed.rawValue
+            candidate.respondedAt = now
+        }
+        try? context.save()
+        psstLog.notice("drained \(completed.count) lockdown completions")
     }
 
     /// Creates the `HabitOccurrence` rows the Today screen and the intents read.

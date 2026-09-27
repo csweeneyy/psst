@@ -49,6 +49,11 @@ nonisolated public struct NudgePlan: Sendable, Equatable {
     public var liveActivities: [PlannedNudge]
     public var alarms: [PlannedNudge]
 
+    /// Every planned nudge regardless of tier, oldest first.
+    public var all: [PlannedNudge] {
+        (notifications + liveActivities + alarms).sorted { $0.fireAt < $1.fireAt }
+    }
+
     public init(notifications: [PlannedNudge] = [], liveActivities: [PlannedNudge] = [], alarms: [PlannedNudge] = []) {
         self.notifications = notifications
         self.liveActivities = liveActivities

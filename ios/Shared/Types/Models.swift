@@ -24,6 +24,10 @@ public final class Habit {
     /// What a full day of this habit is worth. Set by priority at setup.
     public var dailyPoints: Int = HabitPriority.normal.points
 
+    /// Shield every other app when this habit is due, until it is done.
+    /// Defaulted so existing stores migrate without a schema version.
+    public var lockdownEnabled: Bool = false
+
     @Relationship(deleteRule: .cascade, inverse: \HabitOccurrence.habit)
     public var occurrences: [HabitOccurrence]
 
@@ -148,7 +152,7 @@ public final class ChatMessage {
 public enum PsstStore {
     /// Plain data, so non-isolated code (alarm bookkeeping, the widget) can
     /// reach it without hopping to the main actor.
-    nonisolated public static let appGroup = "group.com.connorsweeney.Psst"
+    nonisolated public static let appGroup = Lockdown.appGroup
 
     nonisolated public static let schema = Schema([Habit.self, HabitOccurrence.self, ChatMessage.self])
 

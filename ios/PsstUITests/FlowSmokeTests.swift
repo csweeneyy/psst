@@ -59,7 +59,7 @@ nonisolated final class FlowSmokeTests: XCTestCase {
         if allow.waitForExistence(timeout: 8) { allow.tap() }
 
         XCTAssertTrue(
-            app.staticTexts["Today"].waitForExistence(timeout: 10),
+            app.staticTexts["Hi there"].waitForExistence(timeout: 10),
             "onboarding did not land on the app"
         )
         XCTAssertTrue(app.staticTexts["Posture check"].waitForExistence(timeout: 6))
@@ -169,7 +169,7 @@ nonisolated final class FlowSmokeTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         field.typeText("make the posture one every 3 hours")
-        app.buttons["arrow.up"].firstMatch.tap()
+        app.buttons["Send"].firstMatch.tap()
 
         let settled = expectation(description: "worker responded")
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { settled.fulfill() }

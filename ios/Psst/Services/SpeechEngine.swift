@@ -41,16 +41,22 @@ nonisolated final class SpeechEngine: @unchecked Sendable {
         }
     }
 
+    /// A mutable box the audio thread can own outright.
+    private final class Counter: @unchecked Sendable {
+        var value = 0
+    }
+
     private let engine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var recognizer: SFSpeechRecognizer?
     private var tapped = false
 
-    /// `@Sendable` on both closures is what stops them inheriting the caller's
+    /// `@Sendable` on every closure is what stops them inheriting the caller's
     /// isolation. Removing it reintroduces the crash.
     func start(
         onPartial: @escaping @Sendable (String) -> Void,
+        onLevel: @escaping @Sendable (Float) -> Void,
         onFinish: @escaping @Sendable (Error?) -> Void
     ) async -> StartError? {
         guard await Self.authorize() else { return .notAuthorized }
@@ -78,9 +84,29 @@ nonisolated final class SpeechEngine: @unchecked Sendable {
             request.requiresOnDeviceRecognition = recognizer.supportsOnDeviceRecognition
             self.request = request
 
+            // Only ever touched from the audio thread, which is serial.
+            let throttle = Counter()
+
             input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in
-                // Realtime audio thread. Touch nothing but the request.
+                // Realtime audio thread. Touch nothing but the request and the
+                // level, and do not allocate.
                 request.append(buffer)
+
+                // A waveform wants roughly 15 updates a second, not the ~23
+                // this tap delivers, and each one costs a hop to the main
+                // actor. Every other buffer is plenty.
+                throttle.value += 1
+                guard throttle.value % 2 == 0 else { return }
+                guard let channel = buffer.floatChannelData?[0] else { return }
+
+                let count = Int(buffer.frameLength)
+                guard count > 0 else { return }
+                var sum: Float = 0
+                for index in 0..<count {
+                    let sample = channel[index]
+                    sum += sample * sample
+                }
+                onLevel((sum / Float(count)).squareRoot())
             }
             tapped = true
 

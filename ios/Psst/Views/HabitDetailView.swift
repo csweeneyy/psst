@@ -277,8 +277,39 @@ struct HabitDetailView: View {
             }
             .buttonStyle(.borderless)
             .listRowBackground(Theme.Palette.surface)
+
+            if habit.lockdownEnabled {
+                Button { raiseLockdown() } label: {
+                    Label("Try the lockdown now", systemImage: "lock.circle")
+                        .foregroundStyle(Theme.Palette.ink)
+                }
+                .buttonStyle(.borderless)
+                .listRowBackground(Theme.Palette.surface)
+            }
         } footer: {
             Text(previewNote ?? "Fires in 30 seconds as a real \(habit.intensity.title) nudge. Lock your phone to see it the way you normally would.")
+        }
+    }
+
+    /// Raises the shield immediately.
+    ///
+    /// Without this the only way to see a lockdown is to wait for the habit's
+    /// scheduled time, which makes it impossible to check that it works or to
+    /// show anyone. Leaving is the same single tap as the real thing.
+    private func raiseLockdown() {
+        guard LockdownService.isAuthorized else {
+            Task {
+                if let failure = await LockdownService.authorize() {
+                    withAnimation(Theme.fast) { previewNote = failure.errorDescription }
+                } else {
+                    raiseLockdown()
+                }
+            }
+            return
+        }
+        LockdownService.raise(habit: habit.id, name: habit.name)
+        withAnimation(Theme.fast) {
+            previewNote = "Locked. Go to the Home Screen and open anything. Tap \"I did it\" to come back."
         }
     }
 

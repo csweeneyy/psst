@@ -13,6 +13,9 @@ struct HomeView: View {
     @State private var rescheduling: HabitOccurrence?
     @State private var firing: HabitOccurrence?
     @State private var pendingDelete: HabitOccurrence?
+    @State private var renaming = false
+    @State private var draftName = ""
+    @AppStorage("userName", store: .psst) private var userName = ""
     @State private var clock = Date.now
 
     /// Anything pending whose moment has arrived. These do not belong in
@@ -92,22 +95,32 @@ struct HomeView: View {
             }
             .listStyle(.insetGrouped)
             .scrollDismissesKeyboard(.immediately)
-            .navigationTitle("Today")
+            .navigationTitle(greeting)
             .navigationSubtitle(Text(clock.formatted(.dateTime.weekday(.wide).month(.wide).day())))
             .toolbarTitleDisplayMode(.large)
             .toolbar {
-                // An empty navigation bar row above a large title reads as
-                // dead space. The counter earns it and is useful at a glance.
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "star.fill").font(.system(size: 11))
-                        Text("\(PointsService.today(habits))")
-                            .font(Theme.caption(14).monospacedDigit())
+                // The bird sits in the bar above the greeting. It is the only
+                // thing up there, and tapping it is how you tell the app your
+                // name, so it is not a dead affordance.
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { renaming = true } label: {
+                        MascotView(
+                            mood: MascotMood.current(habits: habits, occurrences: occurrences, now: clock),
+                            size: 30
+                        )
                     }
-                    .foregroundStyle(Theme.Palette.ink)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Your name")
                 }
             }
         }
+        .alert("What should I call you?", isPresented: $renaming) {
+            TextField("Name", text: $draftName)
+                .textInputAutocapitalization(.words)
+            Button("Save") { userName = draftName.trimmingCharacters(in: .whitespacesAndNewlines) }
+            Button("Cancel", role: .cancel) { draftName = userName }
+        }
+        .onChange(of: renaming) { _, open in if open { draftName = userName } }
         .sheet(item: $rescheduling) { occurrence in
             RescheduleSheet(occurrence: occurrence) { move(occurrence, to: $0) }
         }
@@ -142,56 +155,51 @@ struct HomeView: View {
             guard phase == .active else { return }
             clock = .now
             if let showing = firing, showing.status != .pending { firing = nil }
+            coordinator.drainLockdownCompletions(context: context)
             Task { await coordinator.resync(context: context) }
         }
     }
 
-    /// The bird, the level, and how far through it you are.
+    private var greeting: String {
+        let name = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Hi there" : "Hi \(name)"
+    }
+
+    /// Progress, with no invented vocabulary.
     ///
-    /// Sits above the list rather than in the navigation bar so it has room to
-    /// mean something. It reacts to state you caused: upright on a streak,
-    /// slumped after a recent miss, beak open when something is due right now.
+    /// An earlier version named the tiers (Quiet, Listening, Steady) and had to
+    /// explain itself: "55 to Listening" tells you nothing about whether that
+    /// is good. A bar between two numbers needs no explaining, so the numbers
+    /// are the whole label.
     private var crest: some View {
         let earned = PointsService.allTime(habits)
-        let level = Level.current(for: earned)
+        let ceiling = Level.ceiling(for: earned)
         let progress = Level.progress(for: earned)
 
-        return HStack(spacing: Theme.Space.m) {
-            MascotView(
-                mood: MascotMood.current(habits: habits, occurrences: occurrences, now: clock),
-                size: 46
-            )
-
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    Text(level.name)
-                        .font(Theme.title(17))
-                        .foregroundStyle(Theme.Palette.ink)
-                    Text("\(earned)")
-                        .font(Theme.caption(13).monospacedDigit())
-                        .foregroundStyle(Theme.Palette.inkSoft)
-                }
-
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Theme.Palette.well)
-                        Capsule()
-                            .fill(Theme.Palette.ink)
-                            .frame(width: max(geometry.size.width * progress, progress > 0 ? 6 : 0))
-                    }
-                }
-                .frame(height: 5)
-
-                if let remaining = Level.pointsToNext(from: earned),
-                   let next = Level.next(after: level) {
-                    Text("\(remaining) to \(next.name)")
-                        .font(Theme.caption(11))
-                        .foregroundStyle(Theme.Palette.inkFaint)
+        return VStack(spacing: 7) {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.Palette.ink.opacity(0.10))
+                    Capsule()
+                        .fill(Theme.Palette.ink)
+                        .frame(width: max(geometry.size.width * progress, progress > 0 ? 8 : 0))
                 }
             }
-            Spacer(minLength: 0)
+            .frame(height: 8)
+
+            HStack {
+                Text(earned, format: .number)
+                    .font(Theme.title(15).monospacedDigit())
+                    .foregroundStyle(Theme.Palette.ink)
+                Spacer()
+                Text(ceiling, format: .number)
+                    .font(Theme.caption(13).monospacedDigit())
+                    .foregroundStyle(Theme.Palette.inkFaint)
+            }
         }
         .animation(Theme.motion, value: earned)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(earned) points of \(ceiling)")
     }
 
     @ViewBuilder
@@ -367,6 +375,13 @@ struct HomeView: View {
             occurrence.status = status
             occurrence.respondedAt = .now
             if wasShowing { firing = nil }
+        }
+
+        // Answering the nudge anywhere gives the phone back, not just the
+        // button on the shield. Scoped to this habit so finishing an unrelated
+        // one cannot unlock it.
+        if let habit = occurrence.habit?.id {
+            LockdownService.lower(ifHolding: habit)
         }
         try? context.save()
         Task {

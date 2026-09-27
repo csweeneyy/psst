@@ -24,6 +24,8 @@ struct HabitSetupView: View {
     @State private var tintHex = HabitStyle.defaultTintHex
     @State private var alarmDenied = false
     @State private var priority: HabitPriority = .normal
+    @State private var lockdown = false
+    @State private var lockdownProblem: String?
 
     enum Mode: String, CaseIterable, Identifiable, Hashable {
         case interval, times, fixed
@@ -159,7 +161,38 @@ struct HabitSetupView: View {
             Text(intensity.blurb)
                 .font(Theme.footnote(13))
                 .foregroundStyle(Theme.Palette.inkSoft)
+
+            if intensity == .alarm { lockdownRow }
         }
+    }
+
+    /// Offered only on the alarm tier. Shielding the phone for a gentle
+    /// reminder would be a wild mismatch between what you asked for and what
+    /// you got, and the tiers exist precisely so that never happens.
+    private var lockdownRow: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Toggle(isOn: $lockdown) {
+                Text("Lock the phone until it is done")
+                    .font(Theme.body(15))
+                    .foregroundStyle(Theme.Palette.ink)
+            }
+            .tint(Theme.Palette.ink)
+            .onChange(of: lockdown) { _, on in
+                guard on, !LockdownService.isAuthorized else { return }
+                Task {
+                    if let failure = await LockdownService.authorize() {
+                        lockdown = false
+                        lockdownProblem = failure.errorDescription
+                    }
+                }
+            }
+
+            Text(lockdownProblem ?? "Every other app is blocked when this is due. One tap on the block screen marks it done and gives the phone back. It lifts on its own after \(Lockdown.maximumMinutes) minutes either way.")
+                .font(Theme.footnote(13))
+                .foregroundStyle(lockdownProblem == nil ? Theme.Palette.inkSoft : Theme.Palette.alarm)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, Theme.Space.xs)
     }
 
     private var cadence: some View {
@@ -452,6 +485,7 @@ struct HabitSetupView: View {
         nudgeText = habit.nudgeText
         nudgeVariants = habit.nudgeVariantsRaw
         priority = HabitPriority.nearest(to: habit.dailyPoints)
+        lockdown = habit.lockdownEnabled
         intensity = habit.intensity
         symbol = habit.symbol
         tintHex = habit.tintHex
@@ -484,6 +518,7 @@ struct HabitSetupView: View {
             habit.nudgeText = copy
             habit.nudgeVariantsRaw = nudgeVariants
             habit.dailyPoints = priority.points
+            habit.lockdownEnabled = lockdown && intensity == .alarm
             habit.intensity = resolved
             habit.schedule = builtSchedule
             habit.symbol = symbol
@@ -495,6 +530,7 @@ struct HabitSetupView: View {
             )
             created.nudgeVariantsRaw = nudgeVariants
             created.dailyPoints = priority.points
+            created.lockdownEnabled = lockdown && intensity == .alarm
             context.insert(created)
         }
         try? context.save()
