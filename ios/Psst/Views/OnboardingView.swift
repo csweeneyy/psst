@@ -52,9 +52,9 @@ struct OnboardingView: View {
                     HStack(spacing: Theme.Space.m) {
                         Image(systemName: intensity.symbol)
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(color(for: intensity))
+                            .foregroundStyle(intensity.accent)
                             .frame(width: 38, height: 38)
-                            .background(Circle().fill(color(for: intensity).opacity(0.12)))
+                            .background(Circle().fill(intensity.accent.opacity(0.12)))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(intensity.title)
                                 .font(Theme.title(16))
@@ -144,13 +144,6 @@ struct OnboardingView: View {
         .padding(.bottom, Theme.Space.l)
     }
 
-    private func color(for intensity: Intensity) -> Color {
-        switch intensity {
-        case .gentle: Theme.Palette.success
-        case .standard: Theme.Palette.ink
-        case .alarm: Theme.Palette.alarm
-        }
-    }
 
     private func finish(withSamples: Bool) async {
         working = true

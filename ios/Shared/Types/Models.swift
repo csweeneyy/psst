@@ -21,6 +21,8 @@ public final class Habit {
     /// lever against "oh, it's that app again" is the words. A habit that says
     /// something slightly different each time stays readable for longer.
     public var nudgeVariantsRaw: String = ""
+    /// What a full day of this habit is worth. Set by priority at setup.
+    public var dailyPoints: Int = HabitPriority.normal.points
 
     @Relationship(deleteRule: .cascade, inverse: \HabitOccurrence.habit)
     public var occurrences: [HabitOccurrence]
@@ -31,8 +33,8 @@ public final class Habit {
         nudgeText: String,
         intensity: Intensity,
         schedule: Schedule,
-        symbol: String = "circle.dashed",
-        tintHex: String = "#007AFF"
+        symbol: String = HabitStyle.defaultSymbol,
+        tintHex: String = HabitStyle.defaultTintHex
     ) {
         self.id = id
         self.name = name
@@ -45,6 +47,7 @@ public final class Habit {
         self.tintHex = tintHex
         self.notes = ""
         self.nudgeVariantsRaw = ""
+        self.dailyPoints = HabitPriority.normal.points
         self.occurrences = []
     }
 

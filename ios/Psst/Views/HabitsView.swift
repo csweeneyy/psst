@@ -140,11 +140,11 @@ struct HabitsView: View {
     private var overview: some View {
         let week = HabitStatsService.stats(for: habits.flatMap(\.occurrences), days: 7)
         return HStack(spacing: 0) {
+            tile("\(PointsService.total(habits, overDays: 7))", "Points")
+            Divider().frame(height: 34)
             tile("\(Int(week.completionRate * 100))%", "7 days")
             Divider().frame(height: 34)
             tile("\(week.completed)", "Done")
-            Divider().frame(height: 34)
-            tile("\(habits.filter { !$0.isPaused }.count)", "Active")
         }
         .padding(.vertical, Theme.Space.m)
     }
@@ -161,7 +161,7 @@ struct HabitsView: View {
 struct HabitRow: View {
     let habit: Habit
 
-    private var tint: Color { Color(hex: habit.tintHex) }
+    private var tint: Color { HabitStyle.tint(habit.tintHex) }
 
     var body: some View {
         HStack(spacing: Theme.Space.m) {
@@ -188,14 +188,13 @@ struct HabitRow: View {
 
             Spacer(minLength: Theme.Space.s)
 
-            let stats = HabitStatsService.stats(for: habit.occurrences, days: 7)
-            Text("\(Int(stats.completionRate * 100))%")
+            Text("\(habit.dailyPoints)")
                 .font(Theme.footnote(14).monospacedDigit())
                 .foregroundStyle(Theme.Palette.inkSoft)
 
             Image(systemName: habit.intensity.symbol)
                 .font(.system(size: 12))
-                .foregroundStyle(intensityColor)
+                .foregroundStyle(habit.intensity.accent)
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
@@ -208,11 +207,4 @@ struct HabitRow: View {
         .opacity(habit.isPaused ? 0.5 : 1)
     }
 
-    private var intensityColor: Color {
-        switch habit.intensity {
-        case .gentle: Theme.Palette.inkFaint
-        case .standard: Theme.Palette.inkSoft
-        case .alarm: Theme.Palette.alarm
-        }
-    }
 }

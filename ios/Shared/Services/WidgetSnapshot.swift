@@ -26,14 +26,14 @@ nonisolated public struct WidgetSnapshot: Sendable, Equatable {
     public static let empty = WidgetSnapshot(
         habitID: nil, occurrenceID: nil,
         habitName: "All clear", nudgeText: "Nothing due",
-        symbol: "checkmark.circle", tintHex: "#007AFF",
+        symbol: "checkmark.circle", tintHex: HabitStyle.defaultTintHex,
         fireAt: nil, completedToday: 0, scheduledToday: 0
     )
 
     public static let placeholder = WidgetSnapshot(
         habitID: nil, occurrenceID: nil,
         habitName: "Posture check", nudgeText: "Psst... check your posture :)",
-        symbol: "figure.stand", tintHex: "#007AFF",
+        symbol: "figure.stand", tintHex: HabitStyle.defaultTintHex,
         fireAt: .now.addingTimeInterval(1800), completedToday: 3, scheduledToday: 6
     )
 

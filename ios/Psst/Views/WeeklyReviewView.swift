@@ -47,6 +47,12 @@ struct WeeklyReviewView: View {
                 Text("\(review.completed) of \(review.answered) nudges answered this week.")
                     .font(Theme.body(16))
                     .foregroundStyle(Theme.Palette.inkSoft)
+                HStack(spacing: 5) {
+                    Image(systemName: "star.fill").font(.system(size: 12))
+                    Text("\(PointsService.total(habits, overDays: 7)) points")
+                        .font(Theme.title(16).monospacedDigit())
+                }
+                .foregroundStyle(Theme.Palette.ink)
             }
             .padding(.vertical, Theme.Space.xs)
             .listRowBackground(Theme.Palette.surface)
@@ -76,9 +82,9 @@ struct WeeklyReviewView: View {
                 HStack(spacing: Theme.Space.m) {
                     Image(systemName: line.symbol)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color(hex: line.tintHex))
+                        .foregroundStyle(HabitStyle.tint(line.tintHex))
                         .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color(hex: line.tintHex).opacity(0.12)))
+                        .background(Circle().fill(HabitStyle.tint(line.tintHex).opacity(0.12)))
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(line.name).font(Theme.body(16)).foregroundStyle(Theme.Palette.ink)

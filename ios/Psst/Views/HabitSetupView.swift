@@ -21,8 +21,9 @@ struct HabitSetupView: View {
     @State private var windowEnd = 21 * 60
     @State private var weekdays: Set<Int> = [1, 2, 3, 4, 5, 6, 7]
     @State private var symbol = "figure.stand"
-    @State private var tintHex = "#007AFF"
+    @State private var tintHex = HabitStyle.defaultTintHex
     @State private var alarmDenied = false
+    @State private var priority: HabitPriority = .normal
 
     enum Mode: String, CaseIterable, Identifiable, Hashable {
         case interval, times, fixed
@@ -36,12 +37,6 @@ struct HabitSetupView: View {
         }
     }
 
-    private static let symbols = [
-        "figure.stand", "drop", "figure.walk", "book", "dumbbell",
-        "moon.zzz", "pills", "eye", "leaf", "brain.head.profile",
-    ]
-    /// System colours, so a habit tint always looks like it belongs to iOS.
-    private static let tints = ["#007AFF", "#34C759", "#5856D6", "#FF9500", "#FF2D55", "#30B0C7"]
 
     var body: some View {
         NavigationStack {
@@ -95,7 +90,7 @@ struct HabitSetupView: View {
                 .card()
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.s), count: 5), spacing: Theme.Space.s) {
-                ForEach(Self.symbols, id: \.self) { candidate in
+                ForEach(HabitStyle.symbols, id: \.self) { candidate in
                     Button {
                         withAnimation(Theme.fast) { symbol = candidate }
                     } label: {
@@ -112,7 +107,7 @@ struct HabitSetupView: View {
             }
 
             HStack(spacing: Theme.Space.m) {
-                ForEach(Self.tints, id: \.self) { candidate in
+                ForEach(HabitStyle.tints, id: \.self) { candidate in
                     Button {
                         withAnimation(Theme.fast) { tintHex = candidate }
                     } label: {
@@ -169,6 +164,13 @@ struct HabitSetupView: View {
 
     private var cadence: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
+            FieldLabel(text: "Worth")
+            ChipRow(options: HabitPriority.allCases, selection: $priority, label: { $0.title })
+            Text("\(priority.points) points for a full day. Streaks multiply it, up to double after four weeks.")
+                .font(Theme.footnote(13))
+                .foregroundStyle(Theme.Palette.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+
             FieldLabel(text: "Repeat")
             ChipRow(options: Mode.allCases, selection: $mode, label: { $0.label })
 
@@ -449,6 +451,7 @@ struct HabitSetupView: View {
         name = habit.name
         nudgeText = habit.nudgeText
         nudgeVariants = habit.nudgeVariantsRaw
+        priority = HabitPriority.nearest(to: habit.dailyPoints)
         intensity = habit.intensity
         symbol = habit.symbol
         tintHex = habit.tintHex
@@ -480,6 +483,7 @@ struct HabitSetupView: View {
             habit.name = name
             habit.nudgeText = copy
             habit.nudgeVariantsRaw = nudgeVariants
+            habit.dailyPoints = priority.points
             habit.intensity = resolved
             habit.schedule = builtSchedule
             habit.symbol = symbol
@@ -490,6 +494,7 @@ struct HabitSetupView: View {
                 schedule: builtSchedule, symbol: symbol, tintHex: tintHex
             )
             created.nudgeVariantsRaw = nudgeVariants
+            created.dailyPoints = priority.points
             context.insert(created)
         }
         try? context.save()

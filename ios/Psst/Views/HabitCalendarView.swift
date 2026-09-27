@@ -67,7 +67,7 @@ struct HabitCalendarView: View {
                 ForEach(habits) { habit in
                     chip(
                         title: habit.name,
-                        tint: Color(hex: habit.tintHex),
+                        tint: HabitStyle.tint(habit.tintHex),
                         isOn: filter == habit.id
                     ) { filter = filter == habit.id ? nil : habit.id }
                 }
@@ -211,7 +211,7 @@ struct HabitCalendarView: View {
                         HStack(spacing: Theme.Space.m) {
                             Image(systemName: occurrence.habit?.symbol ?? "circle")
                                 .font(.system(size: 12))
-                                .foregroundStyle(Color(hex: occurrence.habit?.tintHex ?? "#007AFF"))
+                                .foregroundStyle(HabitStyle.tint(occurrence.habit?.tintHex))
                                 .frame(width: 24)
                             Text(occurrence.habit?.name ?? "Habit")
                                 .font(Theme.body(15))
@@ -220,9 +220,9 @@ struct HabitCalendarView: View {
                             Text(occurrence.scheduledAt.formatted(date: .omitted, time: .shortened))
                                 .font(Theme.footnote(13))
                                 .foregroundStyle(Theme.Palette.inkSoft)
-                            Image(systemName: symbol(for: occurrence.status))
+                            Image(systemName: occurrence.status.symbol)
                                 .font(.system(size: 13))
-                                .foregroundStyle(tint(for: occurrence.status))
+                                .foregroundStyle(occurrence.status.accent)
                         }
                         .padding(.horizontal, Theme.Space.m)
                         .padding(.vertical, 10)
@@ -298,21 +298,4 @@ struct HabitCalendarView: View {
             : Theme.Palette.success.opacity(0.06 + 0.16 * rate)
     }
 
-    private func symbol(for status: OccurrenceStatus) -> String {
-        switch status {
-        case .completed: "checkmark.circle.fill"
-        case .skipped: "moon.zzz.fill"
-        case .missed: "exclamationmark.circle.fill"
-        case .pending: "circle"
-        }
-    }
-
-    private func tint(for status: OccurrenceStatus) -> Color {
-        switch status {
-        case .completed: Theme.Palette.success
-        case .skipped: Theme.Palette.inkFaint
-        case .missed: Theme.Palette.alarm
-        case .pending: Theme.Palette.inkFaint
-        }
-    }
 }

@@ -13,10 +13,11 @@ struct HabitDetailView: View {
     @State private var editing = false
     @State private var confirmingDelete = false
     @State private var previewAt: Date?
+    @State private var previewNote: String?
     @State private var notes = ""
     @FocusState private var notesFocused: Bool
 
-    private var tint: Color { Color(hex: habit.tintHex) }
+    private var tint: Color { HabitStyle.tint(habit.tintHex) }
     private var occurrences: [HabitOccurrence] { habit.occurrences }
 
     private var week: HabitStats { HabitStatsService.stats(for: occurrences, days: 7) }
@@ -161,7 +162,15 @@ struct HabitDetailView: View {
             .listRowInsets(EdgeInsets())
             .listRowBackground(Theme.Palette.surface)
         } footer: {
-            Text("\(month.completed) of \(month.total) answered in the last 30 days.")
+            let streak = HabitStatsService.streak(for: occurrences)
+            let factor = PointsService.multiplier(forStreak: streak)
+            let earned = PointsService.score(habit: habit, on: .now).total
+            Text(
+                "\(month.completed) of \(month.total) answered in the last 30 days. "
+                + "Worth \(habit.dailyPoints) a day"
+                + (factor > 1 ? ", currently x\(String(format: "%.2f", factor)) from the streak" : "")
+                + ". \(earned) earned today."
+            )
         }
     }
 
@@ -260,21 +269,16 @@ struct HabitDetailView: View {
             .buttonStyle(.borderless)
             .listRowBackground(Theme.Palette.surface)
         } footer: {
-            Text("Fires in 10 seconds as a real \(habit.intensity.title) nudge. Lock your phone to see it the way you normally would.")
+            Text(previewNote ?? "Fires in 10 seconds as a real \(habit.intensity.title) nudge. Lock your phone to see it the way you normally would.")
         }
     }
 
     private func firePreview() async {
-        let fireAt = Date.now.addingTimeInterval(10)
-        let occurrence = HabitOccurrence(scheduledAt: fireAt, habit: habit)
-        occurrence.isPinned = true
-        context.insert(occurrence)
-        try? context.save()
-
-        await NotificationService.scheduleNow(
-            habit: habit, occurrenceID: occurrence.id, fireAt: fireAt
-        )
-        withAnimation(Theme.fast) { previewAt = fireAt }
+        let outcome = await NudgePreview.fire(habit: habit, context: context)
+        withAnimation(Theme.fast) {
+            previewAt = .now.addingTimeInterval(NudgePreview.delay)
+            previewNote = outcome.summary
+        }
         await onChange()
     }
 

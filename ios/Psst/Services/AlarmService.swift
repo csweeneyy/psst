@@ -112,6 +112,37 @@ nonisolated enum AlarmService {
         return .success(count)
     }
 
+    /// A single alarm at one moment, separate from the habit's recurring set.
+    /// Used by the preview, which must not disturb the real schedule.
+    static func scheduleOneOff(
+        habit: Habit,
+        occurrenceID: UUID,
+        at fireAt: Date
+    ) async -> Result<Void, ServiceError> {
+        let attributes = AlarmAttributes<PsstAlarmMetadata>(
+            presentation: AlarmPresentation(alert: alert(for: habit)),
+            metadata: PsstAlarmMetadata(
+                habitID: habit.id, habitName: habit.name, symbol: habit.symbol
+            ),
+            tintColor: Color(hex: habit.tintHex)
+        )
+        let configuration = AlarmManager.AlarmConfiguration.alarm(
+            schedule: .fixed(fireAt),
+            attributes: attributes,
+            stopIntent: CompleteHabitIntent(habitID: habit.id, occurrenceID: occurrenceID),
+            secondaryIntent: SnoozeHabitIntent(habitID: habit.id, occurrenceID: occurrenceID),
+            sound: .default
+        )
+        do {
+            _ = try await AlarmManager.shared.schedule(id: UUID(), configuration: configuration)
+            return .success(())
+        } catch AlarmManager.AlarmError.maximumLimitReached {
+            return .failure(.limitReached)
+        } catch {
+            return .failure(.underlying(error))
+        }
+    }
+
     /// The secondary button is `.custom` so Snooze runs our intent and writes a
     /// real skip to the store, instead of AlarmKit's opaque built-in countdown.
     private static func alert(for habit: Habit) -> AlarmPresentation.Alert {

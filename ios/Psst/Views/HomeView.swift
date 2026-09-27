@@ -87,9 +87,12 @@ struct HomeView: View {
                 // An empty navigation bar row above a large title reads as
                 // dead space. The counter earns it and is useful at a glance.
                 ToolbarItem(placement: .topBarTrailing) {
-                    Text(progressLabel)
-                        .font(Theme.caption(13).monospacedDigit())
-                        .foregroundStyle(Theme.Palette.inkSoft)
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill").font(.system(size: 11))
+                        Text("\(PointsService.today(habits))")
+                            .font(Theme.caption(14).monospacedDigit())
+                    }
+                    .foregroundStyle(Theme.Palette.ink)
                 }
             }
         }
@@ -165,8 +168,8 @@ struct HomeView: View {
         }
         let answered = today.filter { $0.status != .pending }
         let done = answered.filter { $0.status == .completed }.count
-        guard !today.isEmpty else { return "" }
-        return "\(done)/\(today.count)"
+        guard !today.isEmpty else { return "nothing today" }
+        return "\(done) of \(today.count) done"
     }
 
     /// Names the next nudge and which habit owns it. Without this, a habit
@@ -197,6 +200,7 @@ struct HomeView: View {
                 .font(Theme.caption(11))
                 .foregroundStyle(Theme.Palette.inkFaint)
             HStack(spacing: Theme.Space.m) {
+                pill(progressLabel, "checkmark.circle", Theme.Palette.inkFaint)
                 pill(
                     "\(coordinator.scheduledNotifications) of 64 reminders",
                     "bell",
@@ -333,7 +337,7 @@ struct OccurrenceRow: View {
     var onReschedule: ((HabitOccurrence) -> Void)?
 
     private var habit: Habit? { occurrence.habit }
-    private var tint: Color { Color(hex: habit?.tintHex ?? "#007AFF") }
+    private var tint: Color { HabitStyle.tint(habit?.tintHex) }
 
     var body: some View {
         HStack(spacing: Theme.Space.m) {
@@ -362,9 +366,9 @@ struct OccurrenceRow: View {
                     }
                 }
             } else {
-                Image(systemName: statusSymbol)
+                Image(systemName: occurrence.status.symbol)
                     .font(.system(size: 16))
-                    .foregroundStyle(statusColor)
+                    .foregroundStyle(occurrence.status.accent)
             }
         }
         .contentShape(Rectangle())
@@ -407,23 +411,6 @@ struct OccurrenceRow: View {
         .buttonStyle(.borderless)
     }
 
-    private var statusSymbol: String {
-        switch occurrence.status {
-        case .completed: "checkmark.circle.fill"
-        case .skipped: "moon.zzz.fill"
-        case .missed: "exclamationmark.circle.fill"
-        case .pending: "circle"
-        }
-    }
-
-    private var statusColor: Color {
-        switch occurrence.status {
-        case .completed: Theme.Palette.success
-        case .skipped: Theme.Palette.inkFaint
-        case .missed: Theme.Palette.alarm
-        case .pending: Theme.Palette.inkFaint
-        }
-    }
 }
 
 // MARK: - In-app takeover
@@ -438,7 +425,7 @@ struct NudgeTakeover: View {
     @State private var appeared = false
 
     private var habit: Habit? { occurrence.habit }
-    private var tint: Color { Color(hex: habit?.tintHex ?? "#007AFF") }
+    private var tint: Color { HabitStyle.tint(habit?.tintHex) }
 
     var body: some View {
         GeometryReader { geometry in
